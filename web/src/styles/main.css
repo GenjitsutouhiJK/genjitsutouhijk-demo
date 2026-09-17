@@ -1,0 +1,216 @@
+/* ==================================================================
+ * 设计令牌（Design Tokens）
+ * 风格基准：浅灰底 + 白色面板 + 深灰实心条 + 1px 发丝线
+ * 无圆角、无投影、纯灰阶；大写字母 + 宽字距营造"终端"质感
+ * ================================================================== */
+:root {
+  /* 背景 */
+  --bg: #f1f2f4;
+  --bg-grad: linear-gradient(160deg, #f7f8f9 0%, #eef0f2 55%, #e7e9eb 100%);
+  --surface: #ffffff;
+
+  /* 线条 */
+  --line: #dcdfe3;        /* 发丝线 */
+  --line-soft: #e8eaed;   /* 更淡的分隔线 */
+  --line-strong: #c8ccd1; /* 准星、装饰线 */
+
+  /* 深灰实心块 */
+  --ink: #3e4247;
+  --ink-hover: #2b2f33;
+  --ink-disabled: #c3c7cb;
+
+  /* 文字 */
+  --text: #4a4f55;
+  --text-title: #545a61;
+  --muted: #868c93;
+  --faint: #b3b8be;
+  --watermark: rgba(62, 66, 71, 0.035);
+
+  /* 状态色（低饱和，避免破坏灰阶基调） */
+  --ok: #4b7f63;
+  --err: #a65152;
+
+  /* 字体 */
+  /* Bahnschrift 是 Win10+ 自带的 DIN 风格字体，正好贴合参考稿的字形；
+     它没有中文字形，中文会自动落到后面的系统字体 */
+  --font-sans: 'Bahnschrift', 'DIN Alternate', system-ui, -apple-system,
+    'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', Roboto, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'Courier New', monospace;
+
+  /* 字距 */
+  --ls-wide: 0.18em;
+  --ls-mid: 0.1em;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------
+ * 基础表单控件
+ * .field 是"一行表单"的通用结构（标签行 + 控件），
+ * 被登录页的多个输入框共用，所以放在全局而不是某个组件的 scoped 里。
+ * ------------------------------------------------------------------ */
+
+/* 标签行：编号 / 名称 —————— 右侧延伸发丝线 */
+.field-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.field-code {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--ls-mid);
+  color: var(--faint);
+}
+
+.field-label {
+  flex: none;
+  font-size: 13px;
+  letter-spacing: var(--ls-mid);
+  color: var(--text-title);
+}
+
+.field-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.field input {
+  width: 100%;
+  padding: 11px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: var(--ls-mid);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.field input::placeholder {
+  color: var(--faint);
+}
+
+.field input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(62, 66, 71, 0.07);
+}
+
+/* ------------------------------------------------------------------
+ * 共用版式块
+ * 登录页和主页都会用到这些结构（区域标题行、面板、按钮）。
+ * 放在全局而不是各自组件的 scoped 里，一来不用抄两份，
+ * 二来两个页面天然共用同一套视觉语言，风格不会走偏。
+ * ------------------------------------------------------------------ */
+
+/* 区域标题行：编号 / 标题 —————— 右侧延伸发丝线 */
+.stage-head {
+  width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.stage-title {
+  flex: none;
+  font-size: 12px;
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* 面板：深灰实心标题条 + 1px 描边方框，零圆角零投影 */
+.panel {
+  width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.panel-bar {
+  padding: 8px 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 12px;
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 20px 22px;
+}
+
+/* ------------------------------------------------------------------
+ * 按钮
+ * .btn 是底座（尺寸、字距、圆角），
+ * .btn--primary / .btn--ghost 决定配色，两者组合使用。
+ * 密码框右侧那个 SHOW/HIDE 是纯文字按钮，不属于这一套。
+ * ------------------------------------------------------------------ */
+.btn {
+  width: 100%;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em; /* 抵消字距在末字后多出的空隙，让文字真正居中 */
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+/* 主按钮：深灰实心，页面里只该有一个 */
+.btn--primary {
+  color: #ffffff;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+}
+
+.btn--primary:disabled {
+  color: #f4f5f6;
+  background: var(--ink-disabled);
+  border-color: var(--ink-disabled);
+  cursor: not-allowed;
+}
+
+/* 次按钮：白底描边，用于"退出登录"这类不抢戏的操作 */
+.btn--ghost {
+  color: var(--text-title);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.btn--ghost:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}

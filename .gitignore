@@ -1,0 +1,19 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# AI 工作台数据（含会话记录）
+.workbuddy/
+
+# 打包副本
+*.zip
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+
+# 构建产物（子目录的 .gitignore 已覆盖，这里再兜一层）
+node_modules/
+target/
+dist/
