@@ -4,7 +4,7 @@
 
 当前目标很朴素：先跑通一个**登录页 → 主页**的基础流程，把"前端怎么调用后端接口、登录数据怎么传过页面"这条主线打通，再一点点往上加功能。所以现在的内容刻意保持精简，方便逐步理解，而不是一上来就堆满功能。
 
-> 仓库根目录当前在磁盘上的名字是 `genjitsutouhijk.demo`，后续计划统一改名为 `genjitsutouhijk-demo`（见下方"已知事项"）。
+> 仓库已推送到 GitHub（见下方"已知事项"）。
 
 ## 技术栈
 
@@ -12,13 +12,14 @@
 |---|---|---|
 | 后端 `server/` | Spring Boot 4.1.1 + Java 21 + Maven | Controller / Service 分层，统一异常处理 + 参数校验 |
 | 前端 `web/` | Vite + Vue 3 + Vue Router 4 | 单页应用，登录页 + 主页 |
-| 通信 | 基于 `fetch` 的封装 + Spring CORS | 前端默认请求 `http://localhost:8080/api` |
+| 通信 | 基于 `fetch` 的封装 + Spring CORS | 请求后端 `http://localhost:8080`，接口路径以 `/api` 开头 |
 
 ## 仓库结构
 
 ```
 genjitsutouhijk-demo/
 ├─ README.md                本文件（整项目说明）
+├─ .gitignore               忽略 IDE 配置、AI 工作台数据、打包副本等
 ├─ server/                  后端（Spring Boot）
 │  ├─ pom.xml               Maven 配置（groupId io.github.genjitsutouhijk）
 │  └─ src/
@@ -105,13 +106,14 @@ npm run preview  # 本地预览打包结果
 打开页面后：
 1. 访问 `/` 会被自动重定向到登录页 `/login`；
 2. 用 `admin / 123456` 登录，成功后跳到 `/home`；
-3. 主页展示登录接口返回的几条真实数据，并有"退出登录"按钮。
+3. 主页展示登录时缓存下来的会话数据（账号 / 登录时间 / 令牌信息 —— 来自登录接口的返回体，存在 `sessionStorage` 里），并有"退出登录"按钮。
 
 > 直接访问 `/home` 且未登录，会被路由守卫弹回登录页。
 
 ## 前后端怎么连起来
 
-- 前端所有请求走 `src/utils/request.js` 这一个出口，基础地址 `BASE_URL = http://localhost:8080/api`（改后端地址只动这一处）。
+- 前端所有请求走 `src/utils/request.js` 这一个出口，`BASE_URL = 'http://localhost:8080'`。
+  ⚠️ 注意它**不含 `/api`** —— 接口的完整路径在 `src/api/auth.js` 里写（`/api/auth/login`）。换后端地址只需改 `BASE_URL` 这一处。
 - 后端 `CorsConfig` 放行了 `http://localhost:5173` 对 `/api/**` 的跨域访问。
   - ⚠️ 注意：若 Vite 启动时 **5173 端口被占用**，会自动改用 `5174`，此时前端端口与 CORS 白名单不一致，登录请求会被浏览器拦截。解决办法：要么让出 5173 端口，要么在 `CorsConfig` 里把 `5174` 也加进白名单。
 
@@ -136,6 +138,9 @@ npm run preview  # 本地预览打包结果
 
 ## 已知事项
 
-- 仓库根目录磁盘名仍是 `genjitsutouhijk.demo`，计划改名为 `genjitsutouhijk-demo`（小写 kebab-case，与后端 artifactId 对齐）。
+- 远程仓库：`git@github.com:GenjitsutouhiJK/genjitsutouhijk-demo.git`（推送走 SSH）。
+  ⚠️ GitHub Pages **只托管静态文件**，`server/`（Spring Boot）无法部署上去；将来若要上线在线版本，
+  只能把 `web/` 单独拆成仓库，后端另找地方部署。
 - `web/dist/` 是 `npm run build` 的产物，可随时删除、不纳入版本管理。
 - `web/src/assets/` 下的 `hero.png` / `vite.svg` / `vue.svg` 以及 `web/public/icons.svg` 是脚手架残留，没有任何代码引用，可删。
+- `server/pom.xml` 里的 **Lombok** 依赖目前完全没用到（所有 DTO 都用 `record` 实现，不需要它生成 getter），属脚手架残留，可删。
