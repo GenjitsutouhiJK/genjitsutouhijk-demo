@@ -21,6 +21,7 @@ genjitsutouhijk-demo/
 ├─ README.md                本文件（整项目说明）
 ├─ .gitignore               忽略 IDE 配置、AI 工作台数据、打包副本等
 ├─ server/                  后端（Spring Boot）
+│  ├─ README.md             后端专属说明（分层约定、接口与错误码、Boot 4 踩坑）
 │  ├─ pom.xml               Maven 配置（groupId io.github.genjitsutouhijk）
 │  └─ src/
 │     ├─ main/java/.../demo/
