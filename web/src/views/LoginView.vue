@@ -21,7 +21,11 @@ async function handleLogin() {
 
   try {
     const json = await login({
-      username: username.value,
+      // 用户名去掉首尾空格后再发。复制粘贴用户名时很容易带进空格，
+      // 而在注册页那边已经统一做了 trim —— 两处行为必须一致，
+      // 否则会出现"注册时能用、登录时说账号不存在"这种很难查的问题。
+      // 密码不能 trim：空格是密码的合法字符。
+      username: username.value.trim(),
       password: password.value,
     })
 
@@ -76,31 +80,15 @@ async function handleLogin() {
         </button>
 
         <p v-if="errorMessage" class="status">{{ errorMessage }}</p>
+
+        <p class="form-switch">
+          <span>还没有账号？</span>
+          <!-- RouterLink 会渲染成一个 <a>，但点击时走前端路由、不刷新整页 -->
+          <RouterLink class="form-switch-link" :to="{ name: 'register' }">
+            创建账号
+          </RouterLink>
+        </p>
       </div>
     </section>
   </AppShell>
 </template>
-
-<style scoped>
-/* ---------------- 结果提示（只在出错时出现） ---------------- */
-.status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-soft);
-  font-size: 12px;
-  letter-spacing: var(--ls-mid);
-  color: var(--err);
-}
-
-/* 呼应参考稿里的小方块节点 */
-.status::before {
-  content: '';
-  flex: none;
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-}
-</style>

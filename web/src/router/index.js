@@ -5,9 +5,14 @@
  *
  * 以前 App.vue 里写死了 <LoginView />，不管地址是什么都只显示登录页。
  * 有了路由之后，地址栏变成 /login、/home，页面跟着换，浏览器前进/后退也能用。
+ *
+ * meta 里的两个标记：
+ *   requiresAuth —— 必须登录才能看。没登录会被守卫送去登录页。
+ *   guestOnly    —— 只给"还没登录"的人看。已经登录了还去 /login 没意义，直接回主页。
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
 import HomeView from '../views/HomeView.vue'
 import { isLoggedIn } from '../utils/session'
 
@@ -19,6 +24,14 @@ const routes = [
     path: '/login',
     name: 'login',
     component: LoginView,
+    meta: { guestOnly: true },
+  },
+
+  {
+    path: '/register',
+    name: 'register',
+    component: RegisterView,
+    meta: { guestOnly: true },
   },
 
   {
@@ -46,12 +59,20 @@ const router = createRouter({
 })
 
 /**
- * 全局前置守卫：每次跳转之前都会先跑一遍这个函数，用来拦截"没登录就想进 /home"的情况。
+ * 全局前置守卫：每次跳转之前都会先跑一遍这个函数，用来拦截不该进的页面。
  * 返回 undefined / true = 放行；返回一个路由对象 = 改去那个路由。
  */
 router.beforeEach((to) => {
+  // 方向一：需要登录的页面，没登录就送去登录页
   if (to.meta.requiresAuth && !isLoggedIn()) {
     return { name: 'login' }
+  }
+
+  // 方向二：只给未登录用户的页面（登录页 / 注册页），已登录就送回主页。
+  // 注意顺序：两条都要写。少了方向二的话，登录之后手点浏览器"后退"
+  // 会又回到登录页，看起来像是"被登出了"，其实只是没拦。
+  if (to.meta.guestOnly && isLoggedIn()) {
+    return { name: 'home' }
   }
 })
 

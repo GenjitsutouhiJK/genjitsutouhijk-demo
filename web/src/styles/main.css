@@ -214,3 +214,55 @@ body {
   color: var(--ink);
   border-color: var(--ink);
 }
+
+/* ------------------------------------------------------------------
+ * 表单结果提示（登录 / 注册页共用，只在出错时出现）
+ * 用一条上边线和上面隔开，再配一个和标签行同款的小方块节点。
+ * ------------------------------------------------------------------ */
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  letter-spacing: var(--ls-mid);
+  color: var(--err);
+}
+
+/* 呼应参考稿里的小方块节点 */
+.status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+
+/* ------------------------------------------------------------------
+ * 表单底部的"换一个页面"链接行（登录 <-> 注册）
+ * 居中一行小字 + 一条下划线的链接文字，不抢主按钮的注意力。
+ * ------------------------------------------------------------------ */
+.form-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: var(--ls-mid);
+  color: var(--muted);
+}
+
+.form-switch-link {
+  color: var(--text-title);
+  text-decoration: none;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--line-strong);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.form-switch-link:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
