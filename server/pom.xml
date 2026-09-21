@@ -41,6 +41,48 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
+		<!-- 持久层：Spring Data JPA + Hibernate。
+		     提供 @Entity 注解、EntityManager、事务管理，以及"只写接口就能用的" Repository。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- 建表脚本管理：用带版本号的 SQL 文件建表、改表，而不是让 Hibernate 自动改表结构。
+		     注意 Boot 4 里这个 starter 就叫 spring-boot-starter-flyway，
+		     不像 Boot 3 那样"自己往 pom 里加 flyway-core"。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+
+		<!-- H2 数据库：一个 jar 就能跑，不用安装任何数据库服务。
+		     版本由 Spring Boot 的 BOM 统一管理（4.1.1 对应 2.4.240），所以这里不写 <version>。
+		     scope=runtime：代码里不直接 import H2 的类，只在运行时用它的驱动。 -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- 密码加密：只为了拿 BCryptPasswordEncoder 这一个工具类。
+		     注意引的是 spring-security-crypto（纯工具包，没有任何过滤器），
+		     而不是 spring-boot-starter-security —— 后者会把整套认证链装进来并默认拦下所有请求，
+		     那是里程碑 ③ 才做的事。版本同样由 Boot 的 BOM 管。 -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-crypto</artifactId>
+		</dependency>
+
+		<!-- H2 的网页控制台：浏览器里直接看表、跑 SQL 的小工具。
+		     ⚠️ Boot 4 的一个坑：它被拆成了独立模块，不再是自动配置里自带的东西。
+		     光在 application.properties 里写 spring.h2.console.enabled=true 是没用的，
+		     不加这个依赖，访问 /h2-console 会得到 404。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-h2console</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>

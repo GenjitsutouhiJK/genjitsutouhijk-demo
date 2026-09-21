@@ -3,6 +3,7 @@ package io.github.genjitsutouhijk.demo.controller;
 import io.github.genjitsutouhijk.demo.dto.ApiResponse;
 import io.github.genjitsutouhijk.demo.dto.LoginRequest;
 import io.github.genjitsutouhijk.demo.dto.LoginResponse;
+import io.github.genjitsutouhijk.demo.dto.RegisterRequest;
 import io.github.genjitsutouhijk.demo.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,5 +63,29 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.success(authService.login(request.username(), request.password()));
+    }
+
+    /**
+     * 注册
+     *
+     * 对比一下就能看出这个 Controller 现在有多"薄"：
+     *   两个接口加起来，去掉注解和注释，真正干活的只有两行 return。
+     *   业务规则的差异（注册要先查用户名占没占用、密码要加密后再存）
+     *   全在 AuthService 里，这里只负责告诉 Spring"什么路径、收什么、怎么校验"。
+     *
+     * 这也是"加接口"应该有的手感：
+     *   如果你加一个新接口时，需要往 Controller 里塞业务代码，
+     *   那说明有东西本该放在 Service 里。
+     *
+     * 关于返回值：注册成功后同时把登录凭证发回去，相当于"注册即登录"，
+     * 前端拿到就能直接进主页，不用再调一次 /login。
+     * 返回的结构和登录完全一样（LoginResponse），前端可以走同一套处理逻辑。
+     *
+     * @param request 请求体，字段上的 @NotBlank / @Size 由 @Valid 触发校验
+     * @throws io.github.genjitsutouhijk.demo.exception.BusinessException 用户名已被占用（code 1004）
+     */
+    @PostMapping("/register")
+    public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ApiResponse.success(authService.register(request.username(), request.password()));
     }
 }

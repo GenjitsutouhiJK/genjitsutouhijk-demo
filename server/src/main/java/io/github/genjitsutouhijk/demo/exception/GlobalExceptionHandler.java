@@ -3,6 +3,7 @@ package io.github.genjitsutouhijk.demo.exception;
 import io.github.genjitsutouhijk.demo.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -115,7 +116,29 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 5. 兜底：所有没被上面接住的异常
+     * 5. 数据库约束被违反：唯一索引撞了、非空字段给了 null
+     *
+     * 为什么需要它？—— 用来兜住"并发抢注"这一种情况：
+     *   AuthService.register 是先 existsByUsername 查一次、再 save 插入，
+     *   这两步之间有一个极小的时间窗口。万一两个请求同时用同一个用户名注册，
+     *   两边都会查到"还没人用"，然后都去插入。
+     *   这时数据库的 uk_users_username 唯一约束会挡下第二条 ——
+     *   数据不会被写坏，但抛出来的 DataIntegrityViolationException 是我们没预料到的，
+     *   会落到兜底处理器变成 500 + "服务器开小差了"。这里把它翻译成人话。
+     *
+     * ⚠️ 不严谨的地方，将来要改：
+     *   它把所有 DataIntegrityViolationException 都当成"用户名被占用"。
+     *   现在 users 表上只有一个唯一约束，所以结论是对的；
+     *   等表上多了别的约束（比如手机号也唯一），就得改成按约束名分别给文案了。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ApiResponse<Void> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("数据库约束冲突：{}", ex.getMostSpecificCause().getMessage());
+        return ApiResponse.failure(ErrorCode.USERNAME_TAKEN);
+    }
+
+    /**
+     * 6. 兜底：所有没被上面接住的异常
      *
      * 走到这里说明是代码 bug（空指针、数组越界……）或者依赖挂了（数据库连不上）。
      * 用户看不懂也没必要看细节，所以对外只给一句通用文案；
