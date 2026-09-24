@@ -28,6 +28,10 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- JJWT 不在 Spring Boot 的 BOM 里，版本必须自己写。
+		     生命周期统一用同一个属性，避免 api / impl / jackson 三个包版本错位
+		     （版本不一致时会在运行时抛 NoSuchMethodError，很难查）。 -->
+		<jjwt.version>0.13.0</jjwt.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -65,13 +69,42 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- 密码加密：只为了拿 BCryptPasswordEncoder 这一个工具类。
-		     注意引的是 spring-security-crypto（纯工具包，没有任何过滤器），
-		     而不是 spring-boot-starter-security —— 后者会把整套认证链装进来并默认拦下所有请求，
-		     那是里程碑 ③ 才做的事。版本同样由 Boot 的 BOM 管。 -->
+		<!-- 安全框架本体（里程碑 ③ 才加）。
+		     里程碑 ② 时这里只有 spring-security-crypto（纯工具包，只为了拿 BCryptPasswordEncoder）。
+		     换成 starter 之后：
+		       - BCryptPasswordEncoder 仍然可用（crypto 是它的传递依赖），PasswordConfig 一个字没改；
+		       - 多出来的是一整条**安全过滤器链**，默认会拦下所有请求并要求登录。
+		     所以这个依赖一加，SecurityConfig 就必须同步跟上，否则所有接口都会 401。 -->
 		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-crypto</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!-- JWT 工具库 JJWT。它被拆成三个包，分工是刻意的：
+		       jjwt-api    —— 编译期用的接口（Jwts.builder()、Jwts.parser() 等），我们的代码只依赖它；
+		       jjwt-impl   —— 真正的实现，scope=runtime，编译期看不到，防止误用到内部类；
+		       jjwt-jackson—— 让 JWT 的 JSON 部分交给 Jackson 处理。
+		     为什么要这么分？以后想换掉 impl（比如换个更快的实现），只要运行时换 jar，
+		     我们的业务代码一行都不用改 —— 和 PasswordEncoder 那个思路一样。
+		     ⚠️ 注意 jjwt-jackson 依赖的是 Jackson 2（com.fasterxml.jackson），
+		        而 Spring Boot 4 主用的是 Jackson 3（tools.jackson）。两者包名不同，
+		        可以共存、不会打架，只是会多几个 jar，功能上没有影响。 -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>${jjwt.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
 		</dependency>
 
 		<!-- H2 的网页控制台：浏览器里直接看表、跑 SQL 的小工具。

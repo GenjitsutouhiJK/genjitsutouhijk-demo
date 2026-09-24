@@ -5,6 +5,7 @@ import io.github.genjitsutouhijk.demo.entity.User;
 import io.github.genjitsutouhijk.demo.exception.BusinessException;
 import io.github.genjitsutouhijk.demo.exception.ErrorCode;
 import io.github.genjitsutouhijk.demo.repository.UserRepository;
+import io.github.genjitsutouhijk.demo.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,10 +43,12 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     /**
@@ -146,16 +149,26 @@ public class AuthService {
      * 这两处必须产出完全一样的东西，否则很容易出现"注册给的 token 格式和登录不一样"这种难查的问题。
      * 规则只有一份，以后要改就改这一个地方。
      *
-     * ⚠️ 现在的 accessToken 还是拼出来的假字符串（fake-token-for-xxx），
-     *    而且服务端既没有记录它，也没有任何接口会去校验它 ——
-     *    换句话说，前端拿着这个 token 回来，后端也不知道你是谁。
-     *    里程碑 ③ 会把它换成真正的 JWT：带签名、带过期时间、能被拦截器验证。
+     * ============ 里程碑 ③ 的改动就在这一行 ============
+     *
+     * 之前返回的是拼出来的字符串 "fake-token-for-" + username：
+     *   - 后端既不记录也不校验，前端拿着它回来等于白拿；
+     *   - 而且谁都能自己拼一个，冒充任意用户名。
+     *
+     * 现在交给 JwtService 用密钥签名，它会产出一串 xxx.yyy.zzz 三段式字符串：
+     *   - 里面有用户名和过期时间，由服务端**签名**保护，改一个字就验不过；
+     *   - 服务端不需要存任何东西，收到后自己验签就能认出"这是谁"。
+     *
+     * 有效期也从 JwtService 里取，而不是在这里硬编码 3600 ——
+     * 这样"响应里告诉前端的有效期"和"token 里真正写进去的过期时间"
+     * 一定来自同一个配置项。否则改了一处忘一处，
+     * 会出现"前端以为还有 1 小时，实际 10 分钟就失效了"这种诡异现象。
      */
     private LoginResponse issueToken(String username) {
         return new LoginResponse(
-                "fake-token-for-" + username,
+                jwtService.issue(username),
                 "Bearer",
-                3600L,
+                jwtService.getExpiresInSeconds(),
                 username
         );
     }
