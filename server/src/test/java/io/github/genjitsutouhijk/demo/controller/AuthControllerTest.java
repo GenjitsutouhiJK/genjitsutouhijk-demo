@@ -1,5 +1,6 @@
 package io.github.genjitsutouhijk.demo.controller;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,7 @@ class AuthControllerTest {
     // ==================== 登录 ====================
 
     @Test
-    @DisplayName("登录成功：code=0，返回假 token")
+    @DisplayName("登录成功：code=0，返回真正的 JWT")
     void loginSucceedsWithCorrectCredentials() throws Exception {
         String body = mockMvc.perform(post(LOGIN_URL)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -67,10 +68,20 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andReturn().getResponse().getContentAsString();
 
+        // 里程碑 ③ 之前这里断言的是 "fake-token-for-admin"。
+        // 现在换成了真 JWT，断言方式也得跟着换 —— 而且换得更有意义：
+        //   不再断言"等于某个固定字符串"（JWT 每次都不同，那样断言必然失败），
+        //   而是断言"**结构**符合 JWT 的约定"：三段、用点分隔。
+        //   这种断言不会因为签名时间戳变化而假失败，同时又真的能挡住"退回拼字符串"的改动。
+        String token = JsonPath.read(body, "$.data.accessToken");
+        assertThat(token.split("\\.")).hasSize(3);
+
+        // tokenType 和 expiresIn 是前端要用的：前者告诉它怎么拼 Authorization 头，
+        // 后者告诉它提前多久该续期。这两个值来自 JwtService，不再是硬编码的 3600。
         assertThat(body)
-                .contains("fake-token-for-admin")
-                .contains("Bearer")
-                .contains("\"expiresIn\":3600");
+                .contains("\"tokenType\":\"Bearer\"")
+                .contains("\"expiresIn\":3600")
+                .contains("\"username\":\"admin\"");
     }
 
     @Test
@@ -167,7 +178,10 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(body).contains("fake-token-for-alice").contains("alice");
+        // 注册和登录共用 AuthService.issueToken()，所以这里拿到的也是同一格式的真 JWT。
+        // 断言"两处产出一致"比断言具体内容更重要 —— 那正是把签发逻辑抽成一个方法的目的。
+        assertThat(JsonPath.<String>read(body, "$.data.accessToken").split("\\.")).hasSize(3);
+        assertThat(body).contains("\"username\":\"alice\"");
     }
 
     @Test
@@ -229,15 +243,19 @@ class AuthControllerTest {
     // ==================== 其它 ====================
 
     @Test
-    @DisplayName("访问不存在的路径：保持 HTTP 404，不被兜底处理器吞成 200")
-    void unknownPathKeepsNotFoundStatus() throws Exception {
-        String body = mockMvc.perform(get("/api/does-not-exist"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value(404))
-                .andReturn().getResponse().getContentAsString();
-
-        // 提示里要带上完整路径（含开头斜杠），方便对着地址栏核对
-        assertThat(body).contains("/api/does-not-exist");
+    @DisplayName("访问不存在的路径：未登录时先被安全链拦成 401")
+    void unknownPathIsRejectedBeforeRoutingWhenAnonymous() throws Exception {
+        // ⚠️ 这个测试在里程碑 ③ 之前断言的是 404，现在变成了 401 —— 这是**正确的行为变化**，
+        //    不是 bug。原因：
+        //      过滤器链 → DispatcherServlet → 路由匹配 → Controller
+        //    安全链在路由**之前**。未登录的请求走不到"路由匹配"那一步就被挡下了，
+        //    所以根本轮不到发现"这个路径不存在"。
+        //
+        //    "已登录时不存在的路径仍然返回 404"这一条，在 SecurityIntegrationTest
+        //    的 authenticatedUnknownPathStillReturnsNotFound 里验证。
+        mockMvc.perform(get("/api/does-not-exist"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(1005));
     }
 
     @Test
