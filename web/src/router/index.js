@@ -14,7 +14,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import HomeView from '../views/HomeView.vue'
-import { isLoggedIn } from '../utils/session'
+import { clearSession, isLoggedIn, isTokenExpired, setNotice } from '../utils/session'
 
 const routes = [
   // 访问根路径时直接重定向到登录页
@@ -63,6 +63,27 @@ const router = createRouter({
  * 返回 undefined / true = 放行；返回一个路由对象 = 改去那个路由。
  */
 router.beforeEach((to) => {
+  /*
+   * 第 0 步：先把"本地就已经能判定坏掉"的会话处理掉 —— 过期的凭证。
+   *
+   * 为什么要单独这一步？因为判断"有没有票"和判断"票还有没有效"是两个问题，
+   * 而 isLoggedIn() 只回答了第一个：它看的是 sessionStorage 里躺没躺着那张票。
+   *
+   * 少了这一步，流程会是这样：
+   *   票过期了 → isLoggedIn() 仍然是 true → 守卫放行 /home
+   *   → 主页把面板画出来 → 自己去问后端 → 拿到 1006 → 才把人送回登录页
+   * 结果就是"面板闪一下再被弹走"。而这个闪烁其实完全可以避免：
+   * payload 里的 exp 是明文，本地就能读出来（见 utils/session.js）。
+   *
+   * ⚠️ 这里只处理"过期"这一种。签名被篡改、账号被删这类只有服务端知道的问题，
+   *    仍然靠主页那次核验兜底（见 HomeView.vue 的 verify()）。
+   */
+  if (isLoggedIn() && isTokenExpired()) {
+    clearSession()
+    // 顺手记下原因，登录页会把它显示出来。不记的话用户只知道自己"被踢回来了"。
+    setNotice('登录已过期，请重新登录')
+  }
+
   // 方向一：需要登录的页面，没登录就送去登录页
   if (to.meta.requiresAuth && !isLoggedIn()) {
     return { name: 'login' }

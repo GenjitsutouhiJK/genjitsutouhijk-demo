@@ -4,9 +4,19 @@ import { useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import PasswordInput from '../components/PasswordInput.vue'
 import { login } from '../api/auth'
-import { setSession } from '../utils/session'
+import { setSession, takeNotice } from '../utils/session'
 
 const router = useRouter()
+
+/**
+ * 上一次会话为什么会结束（比如"登录已过期"）。
+ *
+ * takeNotice() 是"读出来就顺手清掉"，所以这句话只会显示一次：
+ * 刷新页面、或者下次自己点进登录页，它就没了。
+ * （为什么需要它：会话在原页面失效时，用户只看到自己突然回到了登录页，
+ *   没有这句话就完全不知道发生了什么。）
+ */
+const notice = ref(takeNotice())
 
 const username = ref('')
 const password = ref('')
@@ -59,6 +69,10 @@ async function handleLogin() {
       <div class="panel-bar">Authentication</div>
 
       <div class="panel-body">
+        <!-- 为什么会被带到这里（凭证过期等）。放在表单最上面，
+             一眼就能看到"我不是走错页面了，是得重新登录"。 -->
+        <p v-if="notice" class="status notice">{{ notice }}</p>
+
         <div class="field">
           <div class="field-head">
             <span class="field-code">01 /</span>
@@ -92,3 +106,20 @@ async function handleLogin() {
     </section>
   </AppShell>
 </template>
+
+<style scoped>
+/*
+ * "上一次会话为什么结束"那句话。
+ *
+ * 复用了全局的 .status（红字 + 前面一个小方块，和表单报错同款），
+ * 但它在面板**最上面**，不需要 .status 那条"和上面的内容隔开"的上边线，
+ * 也不需要上内边距 —— 面板自己的 gap 已经把它和用户名那栏拉开了。
+ *
+ * 写在 scoped 里而不是改全局：全局那套描边对"表单下方的报错"是对的，
+ * 这里只是位置不同带来的一个例外。
+ */
+.notice {
+  padding-top: 0;
+  border-top: none;
+}
+</style>
