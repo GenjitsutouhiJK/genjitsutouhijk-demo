@@ -40,6 +40,19 @@
   /* 字距 */
   --ls-wide: 0.18em;
   --ls-mid: 0.1em;
+
+  /* ---- 动效 ----
+   * 整套动效只允许两种性格：
+   *   ① 机械 —— 快起步、慢收尾，像装置"咔"地到位；
+   *   ② 信号 —— 匀速、缓慢、不引人注意，像设备通着电。
+   * 这里刻意**不用**那些会回弹的曲线（back / elastic）：零圆角的直角版面
+   * 配弹跳曲线会显得轻浮，和这套"终端"气质打架。
+   * 时长全部压在 0.5s 以内，且进场动效一律延迟不超过 0.4s ——
+   * 动效是用来提示结构的，不是让用户等的。 */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1); /* 主力曲线：先快后慢 */
+  --dur-fast: 0.14s; /* 状态切换（hover / 按下） */
+  --dur: 0.24s; /* 小元素进场 */
+  --dur-slow: 0.4s; /* 大块版面进场 */
 }
 
 * {
@@ -90,10 +103,36 @@ body {
   color: var(--text-title);
 }
 
+/* 标签行右侧那条延伸线。
+   它同时兼一份"焦点指示器"的活：哪一栏的输入框拿到了焦点，
+   那条浅灰发丝线就会被一条深色线从左往右覆盖过去 ——
+   像仪表盘上被接通的那一路通道。 */
 .field-line {
+  position: relative;
   flex: 1;
   height: 1px;
   background: var(--line);
+  overflow: hidden;
+}
+
+/* 用 ::after 盖一层而不是直接改 background：
+   改颜色是"整条瞬间变色"，没有方向；从左往右长出来才有"接通"的意思。 */
+.field-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+/* :focus-within 的意思是"这个盒子里（含自己）有东西拿到焦点了"。
+   写成 .field 的后代而不是 input + 相邻兄弟，是因为
+   密码框（PasswordInput）在中间多套了一层 .password-wrap，
+   相邻兄弟选择器在那里会失效。 */
+.field:focus-within .field-line::after {
+  transform: scaleX(1);
 }
 
 .field input {
@@ -143,20 +182,55 @@ body {
   color: var(--muted);
 }
 
+/* 页面进场的第一拍：标题行右侧那条线从左往右"画"出来。
+   transform-origin 一定要显式写 left —— 默认是中心，
+   不写就成了"从中间往两头长"，看着像拉伸而不是描线。 */
+.stage-head .field-line {
+  transform-origin: left center;
+  animation: line-draw var(--dur-slow) var(--ease-out) 0.06s both;
+}
+
 /* 面板：深灰实心标题条 + 1px 描边方框，零圆角零投影 */
 .panel {
   width: 400px;
   background: var(--surface);
   border: 1px solid var(--line);
+  /* 进场：从下方 8px 处浮上来。
+     8px 是试出来的 —— 再小看不出来，再大就成了那种"从屏幕外飞进来"的花活。
+     fill-mode 用 both：延迟期间也必须停在起始态（透明），
+     否则会先整块闪一下再开始动。
+     各页面要"依次落位"时只改 animation-delay，不重写这条。 */
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
 }
 
 .panel-bar {
+  position: relative;
+  overflow: hidden;
   padding: 8px 14px;
   background: var(--ink);
   color: #ffffff;
   font-size: 12px;
   letter-spacing: var(--ls-wide);
   text-transform: uppercase;
+}
+
+/* 标题条进场时，一道浅光从左往右扫过 —— 像设备通电自检。
+   只扫一次（不是 infinite）：无限循环的光带看几秒就变成干扰了。 */
+.panel-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-140%);
+  animation: bar-scan 0.85s var(--ease-out) 0.12s both;
 }
 
 .panel-body {
@@ -173,6 +247,8 @@ body {
  * 密码框右侧那个 SHOW/HIDE 是纯文字按钮，不属于这一套。
  * ------------------------------------------------------------------ */
 .btn {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   padding: 12px;
   font-family: inherit;
@@ -181,7 +257,16 @@ body {
   text-indent: 0.3em; /* 抵消字距在末字后多出的空隙，让文字真正居中 */
   border-radius: 0;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s,
+    transform var(--dur-fast) var(--ease-out);
+}
+
+/* 按下时整体下沉 1px。直角按钮配"行程很短的机械键"这个动作，
+   手感上会明确回应"我收到了" —— 比只变个颜色更实在。
+   :not(:disabled) 是必须的：禁用态还下沉，等于告诉用户"按下去了"，
+   但它其实什么都没发生。 */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 /* 主按钮：深灰实心，页面里只该有一个 */
@@ -201,6 +286,27 @@ body {
   background: var(--ink-disabled);
   border-color: var(--ink-disabled);
   cursor: not-allowed;
+}
+
+/* 禁用态按钮上反复扫过的一道浅光 —— 这是"正在处理"唯一的一处提示，
+   配合按钮文字变成"登录中…/注册中…"。
+
+   ⚠️ 这里把"禁用"直接当成了"加载中"。本项目目前只有这一个禁用原因
+      （见 LoginView / RegisterView 的 :disabled="isLoading"），所以成立；
+      哪天出现第二种禁用原因（比如"必须勾选同意条款"），
+      就得把它换成专门的 .btn--loading 类，否则按钮会假装在忙。 */
+.btn--primary:disabled::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-100%);
+  animation: btn-scan 1.1s linear infinite;
 }
 
 /* 次按钮：白底描边，用于"退出登录"这类不抢戏的操作 */
@@ -240,6 +346,10 @@ body {
   font-size: 12px;
   letter-spacing: var(--ls-mid);
   color: var(--err);
+  /* 从左往右轻推 5px 出现，像一行字刚被打印上去。
+     这段提示是 v-if 控制的，所以每次重新出现都会重播一次 ——
+     正是想要的效果：第二次提交又失败时，用户能看出"它又报了"。 */
+  animation: status-in var(--dur) var(--ease-out) both;
 }
 
 /* 呼应参考稿里的小方块节点 */
@@ -276,4 +386,127 @@ body {
 .form-switch-link:hover {
   color: var(--ink);
   border-color: var(--ink);
+}
+
+/* ==================================================================
+ * 页面切换过渡
+ * 配合 App.vue 里的 <Transition name="route"> 使用。
+ * 写在全局而不是 App.vue 的 scoped 里 —— TRansition 类名是加在
+ * "子组件的根元素"上的，靠 scoped 的作用域属性去命中它太绕。
+ *
+ * 只做淡入淡出，**不加位移**：每个页面的外壳都是 min-height:100% 的整页，
+ * 一旦让它平移，边上就会露出后面的背景色，看着像排版错位。
+ * 位移的活交给各页面自己的进场动效（.panel 的 rise-in 等）。
+ * ================================================================== */
+.route-leave-active {
+  transition: opacity 0.12s ease-in;
+}
+
+.route-leave-to {
+  opacity: 0;
+}
+
+.route-enter-active {
+  transition: opacity 0.22s var(--ease-out);
+}
+
+.route-enter-from {
+  opacity: 0;
+}
+
+/* ==================================================================
+ * 键盘可达性
+ * 用 Tab 走到哪里必须有明确的落点，否则键盘用户完全不知道自己在哪。
+ * 用 outline 而不是 box-shadow：outline 不占布局、也不会被
+ * 祖先的 overflow: hidden 裁掉。
+ * （输入框不受影响：.field input 自己有一条更高优先级的 outline: none，
+ *   它用 border-color + 外圈阴影来表达焦点，那套已经够清楚。）
+ * ================================================================== */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ==================================================================
+ * 关键帧
+ * 集中放一处，组件自己的 scoped 样式直接引用这些名字。
+ * 好处是"整套动效的语法"只有这一个文件能定义，
+ * 想审查整个项目的动效，看这里就够了。
+ * ================================================================== */
+
+/* 通用进场：从下方 8px 浮起 + 淡入。全站所有"落位"都用它。 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 描线：横向长出来。改宽度会触发布局重算，scaleX 只走合成层，便宜得多。 */
+@keyframes line-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* 深色标题条上的自检光带，扫一次就停 */
+@keyframes bar-scan {
+  from {
+    transform: translateX(-140%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+/* 加载中按钮上的光带，一直扫 */
+@keyframes btn-scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* 表单提示：从左往右推出来 */
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==================================================================
+ * 系统开了"减少动态效果"时，一次性全关
+ *
+ * 用 * 全量覆盖，而不是逐个动画写例外 —— 逐个写迟早会漏掉新加的那个，
+ * 而"漏掉"的后果是动画照放，正好违背了用户的设置。
+ *
+ * 时长压到 0.001ms 而不是 0：有些浏览器对 0 时长的动画不触发
+ * animationend / transitionend，将来若挂了监听就会永远等下去。
+ * 延迟也必须一起归零，否则元素会先在起始态（多半是 opacity: 0）停一会儿，
+ * 那反而成了更难受的"空白一闪"。
+ * ================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+  }
 }

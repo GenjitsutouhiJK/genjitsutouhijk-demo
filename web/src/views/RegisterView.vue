@@ -9,6 +9,11 @@
  *   因为两者的"提交后去哪"完全不同：登录是"回来"，注册是"新建一个身份"。
  *   分成两个页面，各自的逻辑一眼能看完；等以后要加"找回密码"，
  *   再把三者抽成一个共用表单组件也不迟 —— 现在抽，反而要多传一堆参数。
+ *
+ * ⚠️ 模板顶层不能有注释或其它兄弟节点（AppShell 必须是唯一的根）。
+ *    道理见 LoginView 的说明：<Transition mode="out-in"> 只认单根，
+ *    顶层多一个注释就会让根变成 Fragment，离开这一页时整页会永久空白且不报错。
+ *    所以关于外壳的说明写在这里，而不是写在 <template> 里。
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -108,8 +113,6 @@ async function handleRegister() {
 </script>
 
 <template>
-  <!-- AppShell 负责页面外壳（背景、水印、准星、顶栏、底栏），
-       它标签之间的内容会填进中间的主区域 -->
   <AppShell>
     <div class="stage-head">
       <span class="field-code">00 /</span>

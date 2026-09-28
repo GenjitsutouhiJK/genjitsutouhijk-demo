@@ -83,6 +83,10 @@ defineProps({
   white-space: nowrap;
   user-select: none;
   pointer-events: none;
+  /* 54 秒挪 16px —— 快到能感觉到"水印在呼吸"，慢到永远抓不住它。
+     这种几乎察觉不到的位移有个实际作用：整页不是一张死图。
+     alternate 让它到了就自己走回来，不用写 100% 那一帧。 */
+  animation: mark-drift 54s ease-in-out infinite alternate;
 }
 
 /* ---------------- 四角十字准星 ---------------- */
@@ -100,12 +104,17 @@ defineProps({
   background: var(--line-strong);
 }
 
+/* 两条笔画分别"长"出来：竖的从中心上下展开，横的从中心左右展开。
+   from 里必须把 translate 一起写上 —— keyframes 不会叠加元素原有的 transform，
+   只写 scaleY 会把那句 translateX(-50%) 挤掉，准星会当场歪掉半个身位。
+   --d 由下面四个角各自给，形成顺时针依次"校准"的节奏。 */
 .crosshair::before {
   left: 50%;
   top: 0;
   width: 1px;
   height: 100%;
   transform: translateX(-50%);
+  animation: cross-v 0.42s var(--ease-out) var(--d, 0s) both;
 }
 
 .crosshair::after {
@@ -114,26 +123,33 @@ defineProps({
   height: 1px;
   width: 100%;
   transform: translateY(-50%);
+  animation: cross-h 0.42s var(--ease-out) calc(var(--d, 0s) + 0.1s) both;
 }
 
+/* --d 的数值：左上 → 右上 → 左下 → 右下，一圈走下来约 0.3s。
+   放在内容进场之后，像是设备先亮起来、再自动校准。 */
 .crosshair--tl {
   top: 78px;
   left: 40px;
+  --d: 0.4s;
 }
 
 .crosshair--tr {
   top: 78px;
   right: 40px;
+  --d: 0.5s;
 }
 
 .crosshair--bl {
   bottom: 78px;
   left: 40px;
+  --d: 0.6s;
 }
 
 .crosshair--br {
   bottom: 78px;
   right: 40px;
+  --d: 0.7s;
 }
 
 /* ---------------- 顶部标题条 ---------------- */
@@ -149,12 +165,49 @@ defineProps({
   border-bottom: 1px solid var(--line);
 }
 
+/* 下沿那道 1px 发丝线上，7 秒一次缓缓划过一小段浅光。
+   它不代表任何状态，纯粹让整个顶栏看起来"通着电"。
+   bottom: -1px 是压在边框上的 —— 让光走在线上，而不是线下面。
+   超出右边界的那部分会被 .page 的 overflow: hidden 收掉，不用管。 */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 140px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    var(--line-strong) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+  animation: signal-run 7s linear infinite;
+}
+
+/* 从左侧被"裁掉"的位置起步，一直走到视口右边外面。
+   用 100vw 而不是百分比：百分比在这里是相对元素自己的宽度（140px）算的，
+   那样只能挪 140px，走不出整个顶栏。 */
+@keyframes signal-run {
+  from {
+    transform: translateX(-140px);
+  }
+  to {
+    transform: translateX(100vw);
+  }
+}
+
 .topbar-title {
   grid-column: 2;
   font-size: 13px;
   letter-spacing: var(--ls-wide);
   text-transform: uppercase;
   color: var(--text-title);
+  /* 像打印机一样从左往右把字"吐"出来。
+     clip-path 是裁自己，不改变布局宽度 —— 用 width 做同样的事
+     会让居中的标题在动画期间一直往左偏。 */
+  animation: title-type 0.5s var(--ease-out) 0.08s both;
 }
 
 .topbar-aside {
@@ -190,5 +243,76 @@ defineProps({
   letter-spacing: var(--ls-wide);
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* 状态文字后面跟一个一闪一闪的小方块 —— 终端的命令行光标。
+   它让"Terminal / Online"这句话从一句静态文案，变成"这台终端正在运行"。
+   用 background: currentColor 而不是写死颜色：底栏文字颜色一变，
+   光标自己跟着变，不用两处维护。
+   55% 那个硬切点配 linear 就是干脆的"亮—灭"，不需要 steps()。 */
+.footer-text::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+  background: currentColor;
+  animation: caret-blink 1.4s linear infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  55% {
+    opacity: 0.65;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------- 关键帧 ---------------- */
+
+/* 水印的极慢漂移。keyframes 只写和基准不同的那部分，
+   但 translate(-50%, -50%) 这个居中位移必须原样带上 ——
+   它不在 to 里就会在动画结束的瞬间被丢掉。 */
+@keyframes mark-drift {
+  from {
+    transform: translate(-50%, -50%);
+  }
+  to {
+    transform: translate(calc(-50% + 16px), calc(-50% - 12px));
+  }
+}
+
+/* 准星的竖笔画：从中心往上下一同展开 */
+@keyframes cross-v {
+  from {
+    transform: translateX(-50%) scaleY(0);
+  }
+  to {
+    transform: translateX(-50%) scaleY(1);
+  }
+}
+
+/* 准星的横笔画：从中心往左右一同展开 */
+@keyframes cross-h {
+  from {
+    transform: translateY(-50%) scaleX(0);
+  }
+  to {
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+/* 顶栏标题从左往右被"打印"出来 */
+@keyframes title-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 </style>

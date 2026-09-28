@@ -1,4 +1,21 @@
 <script setup>
+/**
+ * 登录页。
+ *
+ * ★ 这一页的模板根是 <AppShell>，而它外面**必须是单根** ——
+ *   所以说明写在这里，不写在 <template> 的顶层。
+ *
+ *   原因：App.vue 用 <Transition mode="out-in"> 包住路由页面，而 <Transition>
+ *   只能作用在**单个根节点**上。dev 模式下 Vue 会保留模板里的注释，
+ *   一旦 <template> 顶层出现注释，编译结果就变成 [注释, AppShell] 这种多根，
+ *   根会退化成 Fragment，过渡钩子挂不到真正的 DOM 上。
+ *
+ *   后果不是"动画不好看"，而是：**离开这一页时整页永久空白，控制台一个字都不报**，
+ *   刷新一下又好了（因为整页加载走的是另一条路）。2026-09-28 踩过一次。
+ *
+ * AppShell 负责页面外壳（背景、水印、准星、顶栏、底栏），
+ * 它标签之间的内容会填进中间的主区域。
+ */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
@@ -56,8 +73,6 @@ async function handleLogin() {
 </script>
 
 <template>
-  <!-- AppShell 负责页面外壳（背景、水印、准星、顶栏、底栏），
-       它标签之间的内容会填进中间的主区域 -->
   <AppShell>
     <div class="stage-head">
       <span class="field-code">00 /</span>

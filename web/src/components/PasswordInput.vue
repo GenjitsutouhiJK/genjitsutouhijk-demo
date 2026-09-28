@@ -67,10 +67,16 @@ const showPassword = ref(false)
   letter-spacing: 0.12em;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.15s, transform var(--dur-fast) var(--ease-out);
 }
 
 .toggle-pwd:hover {
   color: var(--ink);
+}
+
+/* 按下时轻微缩一下。⚠️ 这里的 transform 必须把 translateY(-50%) 一起写上 ——
+   它同时承担着"垂直居中"这个职责，只写 scale 会让按钮瞬间往下跳半格。 */
+.toggle-pwd:active {
+  transform: translateY(-50%) scale(0.9);
 }
 </style>

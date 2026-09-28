@@ -382,7 +382,8 @@ function handleLogout() {
             </div>
 
             <!-- 凭证寿命：数字每秒跳一次，进度条跟着缩短 -->
-            <div class="life">
+            <!-- life--low 在剩余不足 20% 时挂上，让数字和进度条一起转红并呼吸 -->
+            <div class="life" :class="{ 'life--low': lifePercent < 20 }">
               <div class="life-head">
                 <span class="life-label">Token Life</span>
                 <span class="life-value mono">{{ remainingText }}</span>
@@ -403,8 +404,17 @@ function handleLogout() {
         </section>
 
         <!-- ============ ② 指标格 ============ -->
+        <!-- --i 是这一格在数组里的下标，CSS 用它算错峰延迟（见 style 里的
+             animation-delay: calc(var(--i) * 55ms + 0.1s)）。
+             把"第几个"交给 CSS，就不用为每一格写一条 nth-child 规则 ——
+             以后加一格、改顺序，样式一个字都不用动。 -->
         <div class="tiles">
-          <div v-for="tile in tiles" :key="tile.label" class="tile">
+          <div
+            v-for="(tile, index) in tiles"
+            :key="tile.label"
+            class="tile"
+            :style="{ '--i': index }"
+          >
             <div class="tile-head">
               <span class="tile-label">{{ tile.label }}</span>
               <span class="tile-tag">{{ tile.tag }}</span>
@@ -524,6 +534,12 @@ function handleLogout() {
  * ① 身份卡
  * ================================================================== */
 
+/* 身份卡：整页的第二拍（第一拍是 stage-head 那条线）。
+   .panel 的 rise-in 是全局定义的，这里只压一个延迟，不重写那条规则。 */
+.panel--hero {
+  animation-delay: 0.04s;
+}
+
 /* .panel-body 默认是纵向排列，身份卡要横向一行排开 */
 .panel-body--hero {
   flex-direction: row;
@@ -546,6 +562,20 @@ function handleLogout() {
   font-weight: 600;
   line-height: 1;
   user-select: none;
+  /* 从下往上"刻"出来：clip-path 把方块从底部往上揭开，
+     连里面的白字一起露出来，像钢印压上去。
+     用 clip-path 而不是 opacity：淡入看着是"浮起来"，
+     揭开看着才是"印上去"，后者更贴这台机器的性格。 */
+  animation: stencil-in var(--dur-slow) var(--ease-out) 0.08s both;
+}
+
+@keyframes stencil-in {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 
 .hero-text {
@@ -571,6 +601,7 @@ function handleLogout() {
 
 /* 徽标：一个小方块 + 一行小字，比纯文字更有"状态"的分量 */
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -589,6 +620,30 @@ function handleLogout() {
   width: 5px;
   height: 5px;
   background: var(--ok);
+}
+
+/* 进场时从徽标边框上"荡"出一圈涟漪，只荡一次。
+   这是整页里唯一一处"信号已捕获"的庆祝动作 ——
+   幅度刻意压得很小（1 → 1.09），而且不循环：
+   一个会一直扩散的圈很快就会变成干扰。 */
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--ok);
+  pointer-events: none;
+  animation: chip-ping 1.5s var(--ease-out) 0.55s both;
+}
+
+@keyframes chip-ping {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.09);
+  }
 }
 
 .hero-note {
@@ -643,9 +698,28 @@ function handleLogout() {
   transition: width 1s linear, background 0.3s;
 }
 
-/* 剩余不足 20% 转红，提示"快到期了" */
+/* 剩余不足 20% 转红，并开始缓慢呼吸 —— 提示"快到期了"。
+   节奏取 1.8s：比心跳慢、比呼吸快，能注意到但还不至于烦人。
+   只让进度条呼吸、不让数字闪，是因为数字每秒都在跳，
+   再叠加闪烁会变成两个频率打架，看着很躁。 */
 .life-fill--low {
   background: var(--err);
+  animation: life-alert 1.8s ease-in-out infinite;
+}
+
+/* 数字只转红，不参与呼吸 —— 让"颜色"和"节奏"各自只承担一件事 */
+.life--low .life-value {
+  color: var(--err);
+}
+
+@keyframes life-alert {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .life-foot {
@@ -673,6 +747,12 @@ function handleLogout() {
   padding: 14px 15px 16px;
   background: var(--surface);
   border: 1px solid var(--line);
+  /* 四格依次落位：第 n 格比第 0 格晚 n × 55ms。
+     55ms 是个经验值 —— 小于 40ms 看着像同时出现，大于 80ms 就成了排队等待。
+     --i 来自模板里的 :style="{ '--i': index }"，
+     var() 的第二个参数是兜底：万一没绑上，就当它是第 0 格，不会整个不显示。 */
+  animation: rise-in var(--dur) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 55ms + 0.1s);
 }
 
 .tile-head {
@@ -718,6 +798,17 @@ function handleLogout() {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   align-items: start; /* 两栏各自多高就多高，别互相拉齐 */
+}
+
+/* 双栏最后落位，且左右只差 60ms —— 
+   这点差值刚好让人读出"先左后右"的顺序，又不至于像两个独立步骤。
+   （两栏的 rise-in 来自全局的 .panel，这里只加延迟。） */
+.panels > .panel:nth-child(1) {
+  animation-delay: 0.26s;
+}
+
+.panels > .panel:nth-child(2) {
+  animation-delay: 0.32s;
 }
 
 /* ---------------- 说明文字 ---------------- */
@@ -855,6 +946,19 @@ function handleLogout() {
   width: 6px;
   height: 6px;
   background: var(--ok);
+  /* 极慢的明暗呼吸（2.8s 一轮）。顶栏那个点一直不动的话，
+     看久了会分不清它是"在线"还是"卡住了"。 */
+  animation: who-breathe 2.8s ease-in-out infinite;
+}
+
+@keyframes who-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* ==================================================================
@@ -889,14 +993,8 @@ function handleLogout() {
   }
 }
 
-/* 用户在系统里开了"减少动态效果"就别扫了，也不让进度条慢慢爬 */
-@media (prefers-reduced-motion: reduce) {
-  .skeleton span {
-    animation: none;
-  }
-
-  .life-fill {
-    transition: none;
-  }
-}
+/* 关掉动效的开关不在这里 —— 全站统一由 styles/main.css 末尾那条
+   `@media (prefers-reduced-motion: reduce)` 覆盖处理。
+   集中一处的好处是：以后新加任何动画都不用记着"再补一条例外"，
+   而漏掉例外恰恰是最容易发生、又最违背用户设置的事。 */
 </style>
