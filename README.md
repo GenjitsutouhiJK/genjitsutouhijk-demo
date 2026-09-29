@@ -14,7 +14,7 @@
 | 认证 | Spring Security 7 + JWT（JJWT 0.13） | 无状态认证：登录发一张签名 token，之后每个请求自带；默认拒绝 + 自定义 401 响应 |
 | 数据库 | H2（文件模式）+ Spring Data JPA + Flyway | 零安装，不用装数据库服务；建表由 Flyway 的 SQL 脚本管理，换库只改配置 |
 | 密码存储 | Spring Security 的 BCrypt | 库里只存哈希，不存明文 |
-| 前端 `web/` | Vite + Vue 3 + Vue Router 4 | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫 |
+| 前端 `web/` | Vite + Vue 3 + Vue Router 4 + TypeScript | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫；纯逻辑层（api/utils/types）已迁 TS |
 | 通信 | 基于 `fetch` 的封装 + Spring CORS | 请求后端 `http://localhost:8080`，接口路径以 `/api` 开头，自动带 `Authorization` 头 |
 
 ## 仓库结构
@@ -66,17 +66,20 @@ genjitsutouhijk-demo/
    ├─ README.md             前端专属说明
    ├─ index.html            入口 HTML
    ├─ vite.config.js        Vite 配置
+   ├─ tsconfig.json         TypeScript 配置（strict；类型检查不并入 build）
    └─ src/
       ├─ main.js            应用入口：createApp + .use(router) + 注册 401 处理
+      ├─ env.d.ts           .vue 模块声明 + vite/client 类型
       ├─ App.vue            根组件：<RouterView> 出口 + 页面切换过渡
       ├─ router/index.js    路由表 + 登录守卫
       ├─ styles/main.css    设计令牌 + 动效令牌与全部关键帧 + 共用版式块（全局）
+      ├─ types/api.ts       前后端契约的类型镜像（手写，非自动生成）
       ├─ utils/
-      │  ├─ session.js      跨页面会话状态（ref + sessionStorage）
-      │  └─ request.js      基于 fetch 的请求封装（BASE_URL、自动带 token、处理 401）
+      │  ├─ session.ts      跨页面会话状态（ref + sessionStorage）
+      │  └─ request.ts      基于 fetch 的请求封装（BASE_URL、自动带 token、处理 401）
       ├─ api/
-      │  ├─ auth.js         登录 / 注册接口
-      │  └─ user.js         当前用户资料接口
+      │  ├─ auth.ts         登录 / 注册接口
+      │  └─ user.ts         当前用户资料接口
       ├─ components/
       │  ├─ AppShell.vue    页面外壳（背景/水印/准星/顶栏/底栏 + 插槽）
       │  └─ PasswordInput.vue  带"显示/隐藏"的密码输入框
@@ -148,6 +151,7 @@ npm install      # 首次运行，安装依赖
 npm run dev      # 启动开发服务器（默认 http://localhost:5173）
 npm run build    # 打包到 web/dist/，产物可直接静态部署
 npm run preview  # 本地预览打包结果
+npm run typecheck # 类型检查（含 .vue）
 ```
 
 打开页面后：
@@ -209,8 +213,8 @@ npm run preview  # 本地预览打包结果
 
 ## 前后端怎么连起来
 
-- 前端所有请求走 `src/utils/request.js` 这一个出口，`BASE_URL = 'http://localhost:8080'`。
-  ⚠️ 注意它**不含 `/api`** —— 接口的完整路径在 `src/api/*.js` 里写（如 `/api/auth/login`）。换后端地址只需改 `BASE_URL` 这一处。
+- 前端所有请求走 `src/utils/request.ts` 这一个出口，`BASE_URL = 'http://localhost:8080'`。
+  ⚠️ 注意它**不含 `/api`** —— 接口的完整路径在 `src/api/*.ts` 里写（如 `/api/auth/login`）。换后端地址只需改 `BASE_URL` 这一处。
 - 同一个文件负责**自动带上 `Authorization: Bearer <token>`**，以及**凭证失效（code 1005/1006/1007）时清会话并跳回登录页**。
   业务代码不需要关心这两件事。失效原因会一并写到 `sessionStorage`，由登录页读出来显示
   （"登录已过期，请重新登录"），这样用户不会莫名其妙地发现自己回到了登录页。

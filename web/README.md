@@ -11,9 +11,12 @@ npm install     # 首次运行，安装依赖
 npm run dev     # 启动开发服务器（默认 http://localhost:5173）
 npm run build   # 打包到 dist/，产物可直接静态部署（如 GitHub Pages）
 npm run preview # 本地预览打包结果
+
+npm run typecheck      # 类型检查：含 .vue（vue-tsc）
+npm run typecheck:fast # 类型检查：只查 .ts（TS 7 原生，快很多）
 ```
 
-接口默认请求 `http://localhost:8080`，基础地址可在 `src/utils/request.js` 的 `BASE_URL` 中统一修改。
+接口默认请求 `http://localhost:8080`，基础地址可在 `src/utils/request.ts` 的 `BASE_URL` 中统一修改。
 
 > ⚠️ 页面上所有涉及账号的操作（登录、注册）都需要 `../server` 后端**同时在跑**，否则只会提示"网络错误，请稍后重试"。
 
@@ -37,7 +40,7 @@ npm run preview # 本地预览打包结果
 
 > 所以调试注册页时，**要先退出登录**，否则会被自动弹回主页。
 >
-> 第 0 步依赖 `utils/session.js` 的 `isTokenExpired()`：JWT 的 payload 是明文，
+> 第 0 步依赖 `utils/session.ts` 的 `isTokenExpired()`：JWT 的 payload 是明文，
 > 本地就能读出 `exp` 来比对，**同步、零网络请求**。
 > ⚠️ 但这只是体验优化，**不是安全边界** —— payload 谁都能改。
 > 真正说了算的仍然是服务端那次核验（`GET /api/user/me`）。
@@ -50,19 +53,23 @@ npm run preview # 本地预览打包结果
 src/
 ├─ main.js                  # 入口：挂载根组件 + 引入全局样式 + use(router)
 ├─ App.vue                  # 根组件：<RouterView> 路由出口 + 页面切换过渡（<Transition name="route">）
+├─ env.d.ts                 # 让 TS 认识 .vue 模块 + 引入 vite/client 类型
 ├─ router/
 │  └─ index.js              # 路由表（/login、/register、/home）+ 双向守卫 beforeEach
 ├─ styles/
 │  └─ main.css              # 全局样式：设计令牌、动效令牌与全部关键帧、共用版式块
 │                           #   （.panel / .status / .form-switch 等）、按钮体系、路由过渡、减少动效开关
+├─ types/
+│  └─ api.ts                # ★ 前后端契约的类型镜像（ApiResponse / LoginResponse /
+│                           #   UserProfile / JwtPayload / ErrorCode）。手写，不是自动生成
 ├─ utils/
-│  ├─ session.js            # 会话状态：setSession / clearSession / isLoggedIn
+│  ├─ session.ts            # 会话状态：setSession / clearSession / isLoggedIn
 │  │                        #   + readTokenPayload / isTokenExpired（本地读过期时间）
 │  │                        #   + setNotice / takeNotice（跨页面的一次性提示，读一次即清）
-│  └─ request.js            # 请求封装：BASE_URL、JSON 处理、自动带 Authorization 头、凭证失效处理
+│  └─ request.ts            # 请求封装：BASE_URL、JSON 处理、自动带 Authorization 头、凭证失效处理
 ├─ api/
-│  ├─ auth.js               # 接口定义层：只声明 login() / register() 调哪个接口、传什么
-│  └─ user.js               # getMe()：取当前登录用户资料（受保护接口）
+│  ├─ auth.ts               # 接口定义层：只声明 login() / register() 调哪个接口、传什么
+│  └─ user.ts               # getMe()：取当前登录用户资料（受保护接口）
 ├─ components/
 │  ├─ AppShell.vue          # 页面外壳：背景/水印/准星/顶栏/底栏，页面内容通过 <slot> 填入
 │  └─ PasswordInput.vue     # 可复用组件：带"显示/隐藏"的密码输入框
@@ -73,10 +80,64 @@ src/
                             #   身份卡（含凭证寿命条）+ 四格指标 + 双栏对照 + 顶栏退出
 ```
 
+## TypeScript
+
+**现状是"部分迁移"**，不是全量：
+
+| 范围 | 状态 |
+|---|---|
+| `types/` `api/` `utils/` | ✅ 已是 `.ts`（纯逻辑、无模板，收益最高） |
+| `App.vue` `AppShell.vue` `PasswordInput.vue` `LoginView.vue` `RegisterView.vue` | ✅ 已加 `lang="ts"` |
+| `HomeView.vue` | ❌ 仍是纯 JS（见下面"还没做的"） |
+| `main.js` `router/index.js` | ❌ 仍是 `.js` |
+
+配置在 `tsconfig.json`：`strict: true`，同时开 `allowJs: true` + `checkJs: false`。
+**让 `.js` 和 `.ts` 暂时共存是故意的** —— 这样才能一个文件一个文件地迁，
+而不是一次性把整个项目改到编译不过。开 `strict` 则是为了把
+`sessionStorage.getItem()` 的 `string | null`、`JSON.parse()` 的 `any`、
+JWT 解码的 `unknown` 这些"平时只写在注释里的假设"全摊到明面上。
+
+> **类型检查不并入 `npm run build`。** Vite 构建只做转译，不做类型检查；
+> 类型检查单独跑 `npm run typecheck`。分开的好处是类型报错不会拦住"我想先跑起来看看"。
+
+### 为什么装了两份 TypeScript
+
+```
+npm run typecheck:fast  →  node_modules/.bin/tsc
+                           来自 @typescript/native，即 TypeScript 7（原生 Go 编译器）
+npm run typecheck       →  vue-tsc
+                           它要 require('typescript/lib/tsc.js')，而这个「typescript」
+                           被 alias 指向 @typescript/typescript6，即仍提供 JS API 的 TS 6
+```
+
+**根因**：TypeScript 7.0 把编译器整体移植到 Go，**不再提供 programmatic API**
+（`require('typescript')` 现在只能拿到版本号）。而 vue-tsc 这类工具必须拿到完整编译器 API
+才能工作，所以要给它留一份 TS 6。官方给的过渡方案就是 npm alias 双安装。
+
+两个需要留意的细节（都实测过）：
+
+- ⚠️ **卡点是 `exports` 封锁，不是"文件不存在"。** TS 7 的包里 `lib/tsc.js` **是存在的**
+  （`bin/tsc` 自己就 import 它），但 `package.json` 的 `exports` 字段**没声明这个子路径**，
+  于是 `require('typescript/lib/tsc.js')` 直接失败（`ERR_PACKAGE_PATH_NOT_EXPORTED`）。
+  兼容包 `@typescript/typescript6` 没有 `exports` 字段，子路径才通得过。
+- ⚠️ **两者报错时的退出码不同**：TS 6 是 `2`，TS 7 是 `1`。以后接 CI 别把判断条件写死。
+- 不冲突的原因：兼容包自带的入口叫 `tsc6`，不叫 `tsc`，所以 `.bin/tsc` 干净地留给了 TS 7。
+
+等 TypeScript 7.1 补上新的 programmatic API（官方说在 7.0 之后 3~4 个月），
+这套双安装就能拆掉，直接装一个 `typescript` 即可。
+
+### 还没做的
+
+- **`HomeView.vue` 仍是纯 JS**：它单独有 **15 处**类型问题（隐式 any、`ref(null)` 被推断成
+  `never`、模板里 `profile` 可能为 null），等拆分这个文件时一起处理。
+  > 顺带一个可复用的做法：判断"该不该一次全开"要**先量**。给 6 个 `.vue` 全加 `lang="ts"`
+  > （代码一字不改）会报 19 处，只开 5 个是 4 处 —— 先量再决定，而不是凭感觉。
+- `main.js` / `router/index.js` 未迁。路由名与参数的类型化收益一般，优先级低于业务代码。
+
 ## 认证是怎么接进来的
 
 后端从里程碑 ③ 起是"默认拒绝"的：除了登录 / 注册，其他接口都要带 token。
-前端这边只需要认准**一个地方**，就是 `utils/request.js`：
+前端这边只需要认准**一个地方**，就是 `utils/request.ts`：
 
 ```js
 const token = session.value?.accessToken
@@ -89,13 +150,13 @@ headers: {
 - **收到 401 时**（后端返回 `code` 1005 / 1006 / 1007）自动 `clearSession()`，并把
   "为什么失效"传给 `main.js` 注册进来的处理函数，由它记下提示再跳回登录页。
 
-关键设计：`request.js` **不 import router**，因为它和 router 会形成循环依赖
-（`request.js → router → views → api → request.js`）。它只导出一个 `setUnauthorizedHandler()`，
+关键设计：`request.ts` **不 import router**，因为它和 router 会形成循环依赖
+（`request.ts → router → views → api → request.ts`）。它只导出一个 `setUnauthorizedHandler()`，
 由 `src/main.js` 在启动时把"跳回登录页"这个动作注册进去 —— 依赖方向始终从上往下，不绕圈。
 
 另外注意：**HTTP 状态码 401 并不影响前端的判断逻辑**。
 后端把 401 的响应体也做成了统一的 `{ code, message, data }`，
-所以 `request.js` 依然是"不看状态码、只解析 body、只判断 `json.code`"。
+所以 `request.ts` 依然是"不看状态码、只解析 body、只判断 `json.code`"。
 
 ### 主页的闸门：核验通过前不渲染
 
@@ -106,7 +167,7 @@ headers: {
 ```
 挂载 → checking（只显示一块 Verifying 闸门，不显示任何会话内容）
          ├─ code 0        → verified → 渲染身份卡 / 指标格 / 双栏
-         ├─ 1005/1006/1007 → request.js 已清会话 → 跳登录页
+         ├─ 1005/1006/1007 → request.ts 已清会话 → 跳登录页
          └─ fetch 抛错     → error → 显示原因 + 重试按钮，**保留会话**
 ```
 
@@ -205,13 +266,13 @@ headers: {
 
 - **views/** 只关心页面展示与交互，不直接写 `fetch`；
 - **api/** 只描述接口，不关心 UI；
-- **utils/request.js** 是唯一的请求出口，换后端地址、加 token、统一错误提示都改这里；
-- **utils/session.js** 是唯一的跨页面会话状态出口，登录/注册页写进去、主页读出来，刷新不丢；
+- **utils/request.ts** 是唯一的请求出口，换后端地址、加 token、统一错误提示都改这里；
+- **utils/session.ts** 是唯一的跨页面会话状态出口，登录/注册页写进去、主页读出来，刷新不丢；
 - **components/** 放与业务无关、可被多个页面复用的 UI 组件；
 - 只属于某个页面的样式写在对应 `.vue` 的 `<style scoped>` 里，跨页面共用的才进 `styles/`。
 - **前端的本地校验规则必须和后端的 DTO 注解保持一致**（用户名 3~20、密码 6~32）。
   本地校验只是为了省一次网络往返，**它挡不住绕过前端直接发请求的情况**，后端那份才是真正的防线；改规则时两边必须一起改。
-- **错误码是前后端之间的契约**：`request.js` 里的 `SESSION_LOST_CODES`（1005/1006/1007）必须和后端
+- **错误码是前后端之间的契约**：`request.ts` 里的 `SESSION_LOST_CODES`（1005/1006/1007）必须和后端
   `ErrorCode` 枚举对得上。这类改动没有类型系统兜底，最容易漏，改的时候两边一起搜。
 - **动画只做"提示结构"这一件事**：进场用来说明"这里分三层、从哪读起"，
   循环动画只用来表达"还活着 / 正在处理"。加新动效前先想清楚它在提示什么 ——
