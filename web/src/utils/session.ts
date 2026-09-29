@@ -13,42 +13,70 @@
  * 但核心概念就是这一份 —— "组件外面的一份共享数据"，只是写法更规范。
  */
 import { ref } from 'vue'
+import type { JwtPayload, LoginResponse } from '../types/api'
 
 const STORAGE_KEY = 'genjitsutouhijk.session'
 const NOTICE_KEY = 'genjitsutouhijk.notice'
 
+/**
+ * 一条会话 = 后端给的凭证 + 前端自己记的一笔时间
+ */
+export interface Session extends LoginResponse {
+  /**
+   * 本地写入时刻（毫秒时间戳）
+   *
+   * 为什么需要它：后端只告诉我们"这张票还有 expiresIn 秒"，
+   * 但刷新页面之后，我们已经不知道那个秒数是从哪一刻开始算的。
+   * 记下写入时刻，才能算出"现在还剩多少"（主页那条进度条就是靠它）。
+   */
+  loggedInAt: number
+}
+
 /** 从 sessionStorage 读回上次的会话；读不到、或者内容坏了，就返回 null */
-function readFromStorage() {
+function readFromStorage(): Session | null {
   try {
-    return JSON.parse(sessionStorage.getItem(STORAGE_KEY)) ?? null
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    // ⚠️ 这里必须显式判 null，不能直接把 getItem 的结果丢给 JSON.parse。
+    //   getItem 的返回类型是 `string | null`，而 JSON.parse 只收 string ——
+    //   不判的话这一行会直接编译不过。
+    //   （其实不判也能跑：JSON.parse(null) 会把参数转成字符串 "null" 再解析成 null。
+    //     但那属于"靠类型转换的巧合在工作"，写明白更好。）
+    if (raw === null) return null
+    return JSON.parse(raw) as Session
   } catch {
     return null
   }
 }
 
-/** 当前会话，null 表示未登录 */
-export const session = ref(readFromStorage())
+/**
+ * 当前会话，null 表示未登录
+ *
+ * `ref<Session | null>` 里的类型参数是**必须写**的：
+ * 写成 `ref(readFromStorage())` 也能跑，但 TS 会按调用结果反推，
+ * 而 readFromStorage() 的返回类型是 Session | null —— 这个推断本身没错，
+ * 显式写出来是为了让"这里可能为空"这件事在声明处就一眼可见。
+ */
+export const session = ref<Session | null>(readFromStorage())
 
 /**
  * 登录成功后写入会话
  *
- * @param {{ accessToken: string, tokenType: string, expiresIn: number, username: string }} data
- *        直接就是后端 /api/auth/login 返回体里的 data 字段
+ * @param data 直接就是后端 /api/auth/login（或 /register）返回体里的 data 字段
  */
-export function setSession(data) {
-  const value = { ...data, loggedInAt: Date.now() }
+export function setSession(data: LoginResponse): void {
+  const value: Session = { ...data, loggedInAt: Date.now() }
   session.value = value
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value))
 }
 
 /** 退出登录：清空会话 */
-export function clearSession() {
+export function clearSession(): void {
   session.value = null
   sessionStorage.removeItem(STORAGE_KEY)
 }
 
 /** 是否已登录，路由守卫里用得到 */
-export function isLoggedIn() {
+export function isLoggedIn(): boolean {
   return session.value !== null
 }
 
@@ -63,9 +91,14 @@ export function isLoggedIn() {
  *   谁都能解开看到里面写了什么 —— 所以 payload 里**不能放密码、身份证号**这类东西。
  *   它能防的只有"篡改"：内容被改过，签名就对不上，服务端会拒绝。
  *
+ * 参数类型写成 `unknown` 而不是 `string`，是有意的：
+ *   调用方手里的 token 来自会话（可能为空）或别处，本来就是"什么都可能有"。
+ *   收成 string 会逼调用方先断言，那等于把"这里可能不是字符串"这个事实藏起来。
+ *   用 unknown 则强制这一层自己去判（下面第一行就是），责任落在该落的地方。
+ *
  * 解不出来（不是 JWT、格式坏了）就返回 null，由调用方决定怎么处理。
  */
-export function readTokenPayload(token) {
+export function readTokenPayload(token: unknown): JwtPayload | null {
   if (typeof token !== 'string') return null
 
   const parts = token.split('.')
@@ -85,7 +118,10 @@ export function readTokenPayload(token) {
       Array.from(binary, (ch) => `%${ch.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''),
     )
 
-    return JSON.parse(json)
+    // JSON.parse 的结果是 any，这里断言成 JwtPayload。
+    // 断言在这里是安全的：后面每个读 claim 的地方都还得自己判存在性
+    // （见下面的 isTokenExpired），断言只是标出"这段 JSON 我们希望长这样"。
+    return JSON.parse(json) as JwtPayload
   } catch {
     return null
   }
@@ -103,8 +139,13 @@ export function readTokenPayload(token) {
  *
  * 读不出 exp（不是 JWT、或者 payload 里没写 exp）时返回 false —— 不下结论，交给服务端。
  * 宁可多跑一次核验，也不要因为解析意外，把好端端登录着的人踢去登录页。
+ *
+ * 注意中间那句 `typeof payload.exp !== 'number'`：
+ *   JwtPayload 里 exp 是可选的（后端理论上可以不写），
+ *   所以 TS 会强制我们在这里收窄一次 —— **这正是我们想要它管的地方**。
+ *   这一步以前只写在注释里，现在编译器会一直盯着。
  */
-export function isTokenExpired() {
+export function isTokenExpired(): boolean {
   const payload = readTokenPayload(session.value?.accessToken)
   if (!payload || typeof payload.exp !== 'number') return false
   return payload.exp * 1000 <= Date.now()
@@ -124,7 +165,7 @@ export function isTokenExpired() {
  * 存 sessionStorage 而不是放在内存变量里：跳转过程中页面可能会换，
  * 内存变量不一定活得下来。存下来更稳，也顺手得到"刷一下提示就没了"这个行为。
  */
-export function setNotice(message) {
+export function setNotice(message: string): void {
   if (!message) return
   sessionStorage.setItem(NOTICE_KEY, message)
 }
@@ -134,8 +175,11 @@ export function setNotice(message) {
  *
  * 这个"读一次就没了"是刻意的：提示描述的是"刚刚发生了什么"。
  * 用户下次自己点进登录页时它已经过时了，一直挂在页面上会让人以为又过期了一次。
+ *
+ * 返回类型是 string 而不是 string | null：读不到时给空字符串，
+ * 调用方（LoginView）就不用为了"可能为空"多写一层判断 —— 空字符串在模板里天然是假值。
  */
-export function takeNotice() {
+export function takeNotice(): string {
   const message = sessionStorage.getItem(NOTICE_KEY)
   if (message) sessionStorage.removeItem(NOTICE_KEY)
   return message ?? ''
