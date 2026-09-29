@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 注册页
  *
@@ -94,7 +94,8 @@ async function handleRegister() {
       password: password.value,
     })
 
-    if (json.code === 0) {
+    // 和 LoginView 同一处陷阱：光判 code 不够，还得判 data 非空（理由与完整说明见那边）。
+    if (json.code === 0 && json.data !== null) {
       // 后端的注册接口是"注册即登录"，返回的 data 和登录一模一样，
       // 所以这里能直接复用登录那套存会话的代码，不需要再调一次登录接口。
       setSession(json.data)
@@ -102,7 +103,8 @@ async function handleRegister() {
     } else {
       // 后端能给出的错误，主要是 1004 用户名已被占用。
       // 这类"要看数据库才知道"的判断前端做不了，只能等后端回话。
-      errorMessage.value = json.message
+      // （code 是 0 却没带 data 时 message 是空串，兜底一句，避免静默失败。）
+      errorMessage.value = json.message || '服务端返回的数据不完整，请稍后重试'
     }
   } catch {
     errorMessage.value = '网络错误，请稍后重试'

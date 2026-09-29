@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 登录页。
  *
@@ -56,13 +56,20 @@ async function handleLogin() {
       password: password.value,
     })
 
-    if (json.code === 0) {
+    // ⚠️ 必须同时判 data 是不是 null —— 只判 code 是不够的。
+    //   类型上 `code === 0` 并不会让 data 变成"一定有值"：ApiResponse 的失败分支里
+    //   code 的类型是 number，而 number 包含 0，所以按 code 收窄时两个分支都满足，
+    //   data 仍然是 `LoginResponse | null`。（完整说明见 types/api.ts。）
+    if (json.code === 0 && json.data !== null) {
       // 成功：先把后端返回的会话信息存起来（主页要用），再跳到主页。
       // 注意这里不需要再把"登录成功"显示出来，因为页面马上就切走了。
       setSession(json.data)
       router.push({ name: 'home' })
     } else {
-      errorMessage.value = json.message
+      // code 非 0 → 直接用后端给的那句话（后端保证它能给人看）。
+      // code 是 0 却没带 data → 按契约不该发生；这时 message 通常是空串，
+      // 所以补一句兜底，否则用户会看到"按钮恢复了，但什么都没发生"。
+      errorMessage.value = json.message || '服务端返回的数据不完整，请稍后重试'
     }
   } catch (error) {
     errorMessage.value = '网络错误，请稍后重试'

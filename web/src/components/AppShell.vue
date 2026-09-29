@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * AppShell —— 页面外壳（共用框架）
  *

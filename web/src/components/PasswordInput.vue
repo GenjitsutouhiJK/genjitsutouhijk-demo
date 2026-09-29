@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 
 defineOptions({ inheritAttrs: false })
@@ -10,10 +10,35 @@ defineProps({
   modelValue: { type: String, default: '' },
 })
 
-defineEmits(['update:modelValue'])
+/**
+ * 类型化的 emits。
+ *
+ * 写成对象形式而不是数组 `['update:modelValue']`，是为了把"负载必须是 string"
+ * 交给编译器管：以后 emit 时漏传或传了个别的类型，保存就会标红，
+ * 不用等到运行时父组件拿到一个奇怪的值才发现。
+ */
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+}>()
 
 // 密码是否明文显示（组件内部状态，外部无需关心）
 const showPassword = ref(false)
+
+/**
+ * 输入框内容变化 → 把新值交给父组件（v-model 的另一半）。
+ *
+ * 为什么不直接在模板里写 `$event.target.value`：
+ *   模板里 $event 的类型是 Event，而 Event.target 的类型是 `EventTarget | null` ——
+ *   既可能为空，EventTarget 上也没有 value 这个属性，所以两处都会报错。
+ *   要把"这个事件一定来自 <input>"这个前提写出来，编译器才放行。
+ *
+ * ⚠️ 这不是"为了让报错闭嘴"：断言集中在这一行，等于把假设摆明。
+ *   将来这个 @input 要是挂到别的元素上，需要改的地方也只有这一处。
+ */
+function handleInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  emit('update:modelValue', target.value)
+}
 </script>
 
 <template>
@@ -31,7 +56,7 @@ const showPassword = ref(false)
         :value="modelValue"
         :type="showPassword ? 'text' : 'password'"
         :placeholder="placeholder"
-        @input="$emit('update:modelValue', $event.target.value)"
+        @input="handleInput"
       />
       <button
         type="button"
