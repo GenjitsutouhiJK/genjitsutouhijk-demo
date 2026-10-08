@@ -283,7 +283,7 @@ function handleLogout() {
 </script>
 
 <template>
-  <AppShell :status="shellStatus">
+  <AppShell :status="shellStatus" :identifier="verifiedUsername" :content-width="920">
     <!-- 顶栏右侧：当前用户 + 退出。
          只在核验通过后出现 —— 没核验就显示用户名，等于拿本地那份没验证过的数据
          当"已确认的身份"用，正是这一页要避免的事。 -->
@@ -557,7 +557,7 @@ function handleLogout() {
   align-items: center;
   justify-content: center;
   background: var(--ink);
-  color: #ffffff;
+  color: var(--on-ink);
   font-size: 26px;
   font-weight: 600;
   line-height: 1;
@@ -890,7 +890,12 @@ function handleLogout() {
 
 .skeleton span {
   height: 11px;
-  background: linear-gradient(90deg, #eceef0 0%, #f8f9fa 50%, #eceef0 100%);
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-a) 0%,
+    var(--skeleton-b) 50%,
+    var(--skeleton-a) 100%
+  );
   background-size: 200% 100%;
   animation: sweep 1.5s ease-in-out infinite;
 }

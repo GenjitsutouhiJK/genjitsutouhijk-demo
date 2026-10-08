@@ -1,0 +1,54 @@
+/* ==================================================================
+ * 自托管字体
+ * ==================================================================
+ * 目前**只有一套**：Playfair Display —— 给 Blueprint 皮肤左外栏那个"用户 ID"
+ * 打字机标识用（见 components/ThemeDecor.vue）。
+ * 它不进 tokens.css，因为 tokens.css 管的是"随主题变化的令牌"，
+ * 而字体文件是**固定的资源引用**，两套主题共用同一份声明。
+ *
+ * ★ 为什么自托管，不用 Google Fonts 的线上链接：
+ *   1) 原素材 letter-e.png（已清理）是 Didone 骨架（竖极粗、横极细、细方衬线），
+ *      而系统字体里没有这一族 —— Windows 只有 Century Schoolbook（教科书体，
+ *      笔画对比中等），观感差一截。Playfair Display 正是照着 Didone 做的
+ *      （John Baskerville / 18 世纪过渡体一路），是免费里最接近的一支。
+ *   2) 系统自带字体是**跨平台不一致**的：Century Schoolbook 只有 Windows 有，
+ *      Mac / 手机上会回落到 Georgia，同一个项目在不同机器上长得不一样。
+ *      自托管之后所有平台用的是同一个文件，量宽、排版全都对得上。
+ *   3) 走 googleapis.com 的线上链接会被墙掉/拖慢首屏；打包进产物没有这个问题。
+ *
+ * ★ 授权：SIL Open Font License 1.1，可商用、可自托管、可随项目分发。
+ *   许可证全文见 ../assets/fonts/OFL.txt（分发时须一并保留）。
+ *
+ * ★ 子集（subset）：Google 只按 unicode-range 切了 latin / latin-ext 两块，
+ *   刻意**不下** cyrillic / vietnamese —— 这个标识只会出现字母和数字，
+ *   多带两块纯属浪费体积。两块加起来 58KB。
+ *
+ * ★ 字重写的是区间 `400 700`：Google 对 400 和 700 返回的是同一个 URL，
+ *   说明这是一个 **wght 可变字体**，一个文件覆盖整段字重轴。
+ *   所以 700 是**真字重**，不是浏览器合成加粗 ——
+ *   ThemeDecor.vue 里那个必须把字重写进 canvas 量宽的坑，到这里自然消失。
+ * ================================================================== */
+
+/* latin —— 字母 / 数字 / 基本标点，ID 的绝对主力 */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/playfair-display-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* latin-ext —— 带变音符号的西欧字母，用户名里偶尔会出现（é / ö / ł …） */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/playfair-display-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}

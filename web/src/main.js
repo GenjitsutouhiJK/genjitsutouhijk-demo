@@ -4,6 +4,17 @@ import App from './App.vue'
 import router from './router'
 import { setUnauthorizedHandler } from './utils/request'
 import { setNotice } from './utils/session'
+import { initTheme } from './utils/theme'
+
+/**
+ * 同步主题状态。
+ *
+ * index.html 里那段内联脚本已经在样式生效前把 data-theme 写好了（防闪跳），
+ * 但它只能改 DOM、改不了 utils/theme.ts 里的那个 ref。
+ * 这里再跑一次，让切换器的选中态和页面实际皮肤对齐 ——
+ * 少这一步的表现是：页面已经是蓝的，切换器却还高亮着 Terminal。
+ */
+initTheme()
 
 /**
  * 注册"会话失效"的处理动作

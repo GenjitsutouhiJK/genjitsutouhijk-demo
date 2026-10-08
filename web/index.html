@@ -5,6 +5,31 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GENJITSUTOUHIJK / TERMINAL</title>
+
+    <!-- ============================================================
+         主题预置：消除首屏闪跳
+         ============================================================
+         必须在样式生效**之前**就把 data-theme 写到 <html> 上。
+         否则用户选了 Blueprint、一刷新，页面会先按默认的 Terminal 画一帧，
+         再跳成蓝色 —— 表现为一次明显的"灰→蓝"闪动。
+
+         ⚠️ 这段不能搬进 main.js：那是 module 脚本，要等 HTML 解析完才执行，
+            中间那几十毫秒正好就是闪跳窗口。
+
+         ⚠️ 键名 'gj-theme' 和取值 'blueprint' 与 src/utils/theme.ts 里是同一套。
+            改那边的话，这里要一起改（只有这一处重复，刻意保留 ——
+            为了消除闪跳，这点重复是值得的）。
+         ============================================================ -->
+    <script>
+      try {
+        if (localStorage.getItem('gj-theme') === 'blueprint') {
+          document.documentElement.setAttribute('data-theme', 'blueprint')
+        }
+      } catch (e) {
+        /* 隐私模式下读写 localStorage 会抛异常。忽略即可：
+           默认皮肤不依赖任何脚本，照常工作。 */
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

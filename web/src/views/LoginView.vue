@@ -80,7 +80,7 @@ async function handleLogin() {
 </script>
 
 <template>
-  <AppShell>
+  <AppShell :identifier="username" :content-width="400">
     <div class="stage-head">
       <span class="field-code">00 /</span>
       <span class="stage-title">Access Terminal</span>

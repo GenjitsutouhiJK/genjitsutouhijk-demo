@@ -9,27 +9,86 @@
  *
  * 这样两个页面的风格不可能走偏 —— 因为它们用的是同一份代码。
  * <slot /> 就是 Vue 的"插槽"：外壳开一个口子，谁用谁往里塞东西。
+ *
+ * ================== 关于主题 ==================
+ *
+ * 外壳同时也是"两套皮肤"的落点：
+ *   ① <ThemeDecor /> 铺一层 Blueprint 专属的装饰（Terminal 下整体透明）
+ *   ② 顶栏左侧放主题切换器
+ * 这两样都放在外壳里、而不是页面里 —— 于是登录页 / 注册页 / 主页
+ * 三页自动都有，而且不会和 HomeView 通过 #aside 插槽塞进来的
+ * "用户名 + 退出登录"打架。
  */
+import ThemeDecor from './ThemeDecor.vue'
+import { THEMES, theme, setTheme } from '../utils/theme'
+
 defineProps({
   /** 顶栏中央的标题 */
   title: { type: String, default: 'GENJITSUTOUHIJK / TERMINAL' },
   /** 底栏状态文字 */
   status: { type: String, default: 'Terminal / Online' },
+  /**
+   * 当前页面的身份标识 —— 登录/注册页传输入框里正在敲的用户名，
+   * 主页传服务端核验过的用户名。
+   *
+   * 外壳自己不用它，只负责把它转发给 <ThemeDecor />：
+   * 装饰层靠这个值把左外栏那块无含义的衬线字母换成真实的 ID。
+   * 由外壳中转而不是各页面自己塞，是为了让三个页面共用同一份接线，
+   * 且页面不必知道"装饰层是怎么实现的"。
+   */
+  identifier: { type: String, default: '' },
+  /**
+   * 当前页内容列的宽度（px）—— 同样只负责转发给 <ThemeDecor />。
+   *
+   * 装饰层要拿它算"左外栏还剩多少横向空间"，才能把用户 ID 的字号
+   * 调成刚好填满那一格。⚠️ 必须和那一页的容器宽度一致：
+   *   登录页 / 注册页 → .panel 的 400   主页 → .home 的 920
+   * 传小了，算出的余量会偏大，字就会压到面板上。
+   *
+   * 默认 920 是"三个页面里最宽"的那个：万一哪个页面忘了传，
+   * 结果也只是字偏小，而不是溢出去。
+   */
+  contentWidth: { type: Number, default: 920 },
 })
 </script>
 
 <template>
   <div class="page">
-    <!-- 背景装饰：超大水印字 -->
+    <!-- Blueprint 皮肤的装饰层。Terminal 下它整体透明（靠 CSS 变量控制，
+         模板里没有 v-if），见 ThemeDecor.vue。
+         identifier 一并转发：装饰层用它把左外栏那块无含义的衬线字母
+         换成当前页面的用户 ID。
+         contentWidth 也转发：装饰层要靠它算那块 ID 的字号（详见 ThemeDecor）。 -->
+    <ThemeDecor :identifier="identifier" :content-width="contentWidth" />
+
+    <!-- 背景装饰：超大水印字（Blueprint 下会换成材质水印，见下方 scoped 样式） -->
     <div class="watermark" aria-hidden="true">GENJITSU</div>
 
-    <!-- 四角十字准星 -->
+    <!-- 四角十字准星（Blueprint 下让位给 ThemeDecor 里的十字素材） -->
     <span class="crosshair crosshair--tl" aria-hidden="true"></span>
     <span class="crosshair crosshair--tr" aria-hidden="true"></span>
     <span class="crosshair crosshair--bl" aria-hidden="true"></span>
     <span class="crosshair crosshair--br" aria-hidden="true"></span>
 
     <header class="topbar">
+      <!-- 左列：主题切换器。放在外壳里而不是页面里，
+           是为了让三个页面都能切，且不占用右侧的 #aside 插槽。 -->
+      <div class="topbar-left">
+        <div class="theme-switch" role="group" aria-label="界面主题">
+          <button
+            v-for="option in THEMES"
+            :key="option.id"
+            type="button"
+            class="theme-opt"
+            :class="{ 'is-on': theme === option.id }"
+            :aria-pressed="theme === option.id"
+            @click="setTheme(option.id)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+
       <span class="topbar-title">{{ title }}</span>
       <!-- 顶栏右侧：具名插槽，由页面自己决定放不放东西（主页放了当前用户名） -->
       <div class="topbar-aside">
@@ -57,7 +116,10 @@ defineProps({
   background: var(--bg-grad);
 }
 
-/* 中心柔光：制造那种由中心向外压暗的层次 */
+/* 中心柔光：制造那种由中心向外压暗的层次。
+   起始色走 --glow：Blueprint 下要减弱（浅底上强白光会把装饰线洗掉）。
+   末端保持 rgba(255,255,255,0) 而不是 transparent ——
+   白色到"透明的白"渐变才是干净的，写 transparent 会经过灰。 */
 .page::after {
   content: '';
   position: absolute;
@@ -66,7 +128,7 @@ defineProps({
   pointer-events: none;
   background: radial-gradient(
     circle at 50% 44%,
-    rgba(255, 255, 255, 0.95) 0%,
+    var(--glow) 0%,
     rgba(255, 255, 255, 0) 58%
   );
 }
@@ -178,9 +240,9 @@ defineProps({
   height: 1px;
   background: linear-gradient(
     90deg,
-    rgba(0, 0, 0, 0) 0%,
+    transparent 0%,
     var(--line-strong) 50%,
-    rgba(0, 0, 0, 0) 100%
+    transparent 100%
   );
   pointer-events: none;
   animation: signal-run 7s linear infinite;
@@ -196,6 +258,65 @@ defineProps({
   to {
     transform: translateX(100vw);
   }
+}
+
+/* ---------------- 顶栏左列：主题切换器 ---------------- */
+.topbar-left {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+}
+
+/* 两段式的分段控件：零圆角、1px 描边，选中态反白。
+   刻意做得比正文还小一号 —— 它是个"设置项"，不该和页面标题抢注意力。 */
+.theme-switch {
+  display: flex;
+  border: 1px solid var(--line);
+}
+
+.theme-opt {
+  padding: 5px 11px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+/* 两段之间的竖线。用相邻兄弟选择器而不是给每项加 border-right ——
+   那样最后一项也会拖一条多余的线出来。 */
+.theme-opt + .theme-opt {
+  border-left: 1px solid var(--line);
+}
+
+.theme-opt:hover {
+  color: var(--text-title);
+}
+
+.theme-opt.is-on {
+  color: var(--on-ink);
+  background: var(--ink);
+}
+
+/* Blueprint 下取消实心块：选中态改成"蓝字 + 底部一条蓝线"，
+   和 .panel-bar / .btn--primary 的处理保持一致。
+   （这条写在 scoped 里也用 html[data-theme] 前缀，原因见 main.css
+     末尾「主题专属覆盖」那一节的说明：要比组件自身的选择器更具体。） */
+html[data-theme='blueprint'] .theme-opt.is-on {
+  color: var(--ink);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--ink);
+}
+
+/* Blueprint 下改用 ThemeDecor 里的材质水印（"众生行记"标题图层），
+   文字水印退场 —— 两种水印叠在一起只会互相干扰。 */
+html[data-theme='blueprint'] .watermark {
+  display: none;
 }
 
 .topbar-title {
