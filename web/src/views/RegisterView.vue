@@ -163,7 +163,7 @@ async function handleRegister() {
         <p class="form-switch">
           <span>已经有账号了？</span>
           <!-- RouterLink 会渲染成一个 <a>，但点击时走前端路由、不刷新整页。
-               路由名 'login' 对应 router/index.js 里那条 /login。 -->
+               路由名 'login' 对应 router/index.ts 里那条 /login。 -->
           <RouterLink class="form-switch-link" :to="{ name: 'login' }">
             返回登录
           </RouterLink>

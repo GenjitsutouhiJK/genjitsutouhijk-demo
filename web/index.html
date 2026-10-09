@@ -28,7 +28,7 @@
          否则用户选了 Blueprint、一刷新，页面会先按默认的 Terminal 画一帧，
          再跳成蓝色 —— 表现为一次明显的"灰→蓝"闪动。
 
-         ⚠️ 这段不能搬进 main.js：那是 module 脚本，要等 HTML 解析完才执行，
+         ⚠️ 这段不能搬进 main.ts：那是 module 脚本，要等 HTML 解析完才执行，
             中间那几十毫秒正好就是闪跳窗口。
 
          ⚠️ 键名 'gj-theme' 和取值 'blueprint' 与 src/utils/theme.ts 里是同一套。
@@ -48,6 +48,6 @@
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

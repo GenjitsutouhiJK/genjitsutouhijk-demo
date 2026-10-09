@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ThemeMotion —— Blueprint 皮肤的「作图」动效层
  *

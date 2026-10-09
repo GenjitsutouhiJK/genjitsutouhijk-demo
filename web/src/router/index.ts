@@ -73,7 +73,7 @@ router.beforeEach((to) => {
    *   票过期了 → isLoggedIn() 仍然是 true → 守卫放行 /home
    *   → 主页把面板画出来 → 自己去问后端 → 拿到 1006 → 才把人送回登录页
    * 结果就是"面板闪一下再被弹走"。而这个闪烁其实完全可以避免：
-   * payload 里的 exp 是明文，本地就能读出来（见 utils/session.js）。
+   * payload 里的 exp 是明文，本地就能读出来（见 utils/session.ts）。
    *
    * ⚠️ 这里只处理"过期"这一种。签名被篡改、账号被删这类只有服务端知道的问题，
    *    仍然靠主页那次核验兜底（见 HomeView.vue 的 verify()）。

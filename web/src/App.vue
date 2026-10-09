@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 根组件：只负责"页面出口"这一层职责。
- * 具体显示哪个页面由路由决定（见 src/router/index.js）：
+ * 具体显示哪个页面由路由决定（见 src/router/index.ts）：
  *   /login    -> views/LoginView.vue
  *   /register -> views/RegisterView.vue
  *   /home     -> views/HomeView.vue

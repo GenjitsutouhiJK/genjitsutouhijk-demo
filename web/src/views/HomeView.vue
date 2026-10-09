@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 主页：登录成功之后看到的第一页。
  *
@@ -14,7 +14,7 @@
  * 所以顺序是：核验中 → 通过才渲染面板。
  * 三种结果各有各的去处：
  *   通过 → 显示面板
- *   被后端拒绝（1005/1006/1007）→ request.js 清会话，送回登录页
+ *   被后端拒绝（1005/1006/1007）→ request.ts 清会话，送回登录页
  *   压根没问到后端（网络不通）→ 显示明确的错误态，**保留会话**、可以重试
  *
  * 最后那条尤其重要：**连不上后端 ≠ 没登录**。
@@ -41,16 +41,17 @@ import { useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import { getMe } from '../api/user'
 import { session, clearSession } from '../utils/session'
+import type { UserProfile } from '../types/api'
 
 const router = useRouter()
 
 // ---------------- 通用小工具 ----------------
 // 这几个纯粹是"把一个数字变成好看的字符串"，和业务无关，所以放在最上面。
 
-const pad = (n) => String(n).padStart(2, '0')
+const pad = (n: number) => String(n).padStart(2, '0')
 
 /** 秒数 -> "1 小时" / "30 分" / "45 秒"（说给人听的） */
-function toHumanDuration(seconds) {
+function toHumanDuration(seconds: number) {
   if (!seconds) return '—'
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
@@ -65,7 +66,7 @@ function toHumanDuration(seconds) {
  * 必须补零到固定宽度：秒数每跳一次宽度就变一个字，
  * 数字会在原地左右抖动，看着很廉价。等宽字体 + 固定位数才稳。
  */
-function toClock(totalSeconds) {
+function toClock(totalSeconds: number) {
   const s = Math.max(0, Math.floor(totalSeconds))
   const hours = Math.floor(s / 3600)
   const minutes = Math.floor((s % 3600) / 60)
@@ -73,22 +74,29 @@ function toClock(totalSeconds) {
   return `${pad(minutes)}:${pad(s % 60)}`
 }
 
-/** 时间戳(毫秒) -> "2026-09-16 11:45" */
-function toDateTime(timestamp) {
+/**
+ * 时间戳(毫秒) -> "2026-09-16 11:45"
+ *
+ * 参数写成 `number | undefined`（而不是 `number`）是**跟着调用方来的**：
+ * 调用处传的是 `session.value?.loggedInAt` —— session 可能为空，
+ * 所以那一整条链的结果天然带 undefined。写成 number 会逼调用方先断言，
+ * 等于把"可能没有"这件事藏起来；收下 undefined 再自己判，才诚实。
+ */
+function toDateTime(timestamp: number | undefined) {
   if (!timestamp) return '—'
   const d = new Date(timestamp)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** 时间戳(毫秒) -> "11:45"，只到分钟 */
-function toTime(timestamp) {
+/** 时间戳(毫秒) -> "11:45"，只到分钟（同上，跟着调用方收 undefined） */
+function toTime(timestamp: number | undefined) {
   if (!timestamp) return '—'
   const d = new Date(timestamp)
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 // ---------------- 从会话里取数据 ----------------
-// 这些数据是登录成功时 LoginView 存进 utils/session.js 的，
+// 这些数据是登录成功时 LoginView 存进 utils/session.ts 的，
 // 也就是后端 /api/auth/login 返回体里的 data。
 // computed 的意思是"跟着源数据自动算出来"，session 一变，这里就会重新算。
 
@@ -118,7 +126,16 @@ const startedClock = computed(() => toTime(session.value?.loggedInAt))
 // 我们只负责改数据，不用手写"去更新那个 DOM 节点"。
 
 const now = ref(Date.now())
-let ticker = null
+
+/**
+ * 每秒跳一次的定时器句柄。
+ *
+ * ★ 类型必须显式写：只写 `let ticker = null` 时 TS 会把它推成 null，
+ *   后面 `ticker = setInterval(...)` 就会报"不能把 Timer 赋给 null"。
+ *   `ReturnType<typeof setInterval>` 表达的是"setInterval 返回什么就是什么" ——
+ *   浏览器里它是 number，Node 里是 Timeout 对象，这样写两边都对。
+ */
+let ticker: ReturnType<typeof setInterval> | null = null
 
 /** 这张票还剩多少秒（用签发时刻 + 有效期，减掉已经过去的时间） */
 const remainingSeconds = computed(() => {
@@ -151,9 +168,13 @@ const clockText = computed(() => {
 // 那种"不可能的状态"一旦被拼出来，就是 bug 的温床。
 // 一个状态变量则从结构上杜绝了这件事。
 
-const status = ref('checking') // 'checking' | 'verified' | 'error'
+// ★ 下面三个 ref 的类型参数都是必须写的：
+//   status  -> 不写会被推成 string，后面 shellStatus 拿它去索引对象字面量会报错；
+//              写成字面量联合后，"少写一个状态分支"也会立刻被编译器抓住。
+//   profile -> 不写会被推成 Ref<null>，随后赋 UserProfile 直接编译不过。
+const status = ref<'checking' | 'verified' | 'error'>('checking')
 const errorText = ref('') // status==='error' 时给用户看的原因
-const profile = ref(null) // 核验通过后，服务端返回的用户资料
+const profile = ref<UserProfile | null>(null) // 核验通过后，服务端返回的用户资料
 
 /** 核验通过了才有的那个名字（身份卡和顶栏用它，左栏仍显示本地那份） */
 const verifiedUsername = computed(() => profile.value?.username ?? localUsername.value)
@@ -184,14 +205,18 @@ async function verify() {
   try {
     const json = await getMe()
 
-    if (json.code === 0) {
+    // ⚠️ 必须同时判 data 是不是 null —— 只判 code 不够（理由与完整说明见 types/api.ts）：
+    //   failure 分支的 code 类型是 number，而 number 包含 0，
+    //   按 code 收窄时两个分支都满足，data 仍停在 `UserProfile | null`。
+    if (json.code === 0 && json.data !== null) {
       profile.value = json.data
       status.value = 'verified'
       return
     }
 
-    // 走到这里说明后端**明确拒绝**了这张票（1005 没带 / 1006 过期 / 1007 无效）。
-    // 此时 utils/request.js 已经清掉本地会话、并让 main.js 跳登录页了，
+    // 走到这里有两种可能：后端**明确拒绝**了这张票（1005 没带 / 1006 过期 / 1007 无效），
+    // 或者 code 是 0 却没带 data（按契约不该发生）。两者都归到错误态显示。
+    // 此时 utils/request.ts 已经清掉本地会话、并让 main.ts 跳登录页了，
     // 所以下面这两行通常来不及显示。仍然分开写，是为了不把
     // "后端说不行" 和 "压根没问到后端" 混成同一件事 —— 它们的处理方式完全不同。
     errorText.value = json.message || '身份校验未通过'
@@ -201,11 +226,15 @@ async function verify() {
     //   - TypeError：请求根本没拿到响应 —— 后端没启动、端口写错、断网、
     //     或者被浏览器以跨域为由拦下（这种情况在 Network 面板里看得到请求发了，
     //     但 Console 会报 CORS，而 fetch 抛的是同一个 TypeError）；
-    //   - 其它：后端答了，但答的内容没法用（这类错误由 request.js 自己抛，带说明文字）。
+    //   - 其它：后端答了，但答的内容没法用（这类错误由 request.ts 自己抛，带说明文字）。
+    // ⚠️ strict 下 catch 到的 error 是 unknown，不能直接读 .message —— 必须先收窄。
+    //   先判 TypeError 是因为它是 Error 的子类，顺序反了就永远走不到"连不上后端"这档。
     errorText.value =
       error instanceof TypeError
         ? '无法连接后端服务。后端可能没启动，或地址不是 http://localhost:8080。'
-        : error?.message || '请求失败'
+        : error instanceof Error
+          ? error.message || '请求失败'
+          : '请求失败'
     status.value = 'error'
   }
 }
@@ -464,14 +493,17 @@ function handleLogout() {
                 这一栏才是<strong>此刻真实有效</strong>的身份。
               </p>
 
+              <!-- ★ 这一栏位于"核验通过"分支内，profile 逻辑上必然有值；
+                   但模板里编译器不知道 status 与 profile 的关联，
+                   所以按可空访问写（`?.` + 兜底），与页面其它地方一致。 -->
               <dl class="info">
                 <div class="info-row">
                   <dt>用户 ID</dt>
-                  <dd class="mono">{{ profile.id }}</dd>
+                  <dd class="mono">{{ profile?.id ?? '—' }}</dd>
                 </div>
                 <div class="info-row">
                   <dt>用户名</dt>
-                  <dd>{{ profile.username }}</dd>
+                  <dd>{{ profile?.username ?? '—' }}</dd>
                 </div>
                 <div class="info-row">
                   <dt>注册时间</dt>

@@ -29,7 +29,7 @@ npm run typecheck:fast # 类型检查：只查 .ts（TS 7 原生，快很多）
 | `/home` | 主页 | 必须已登录 |
 | 其他 / `/` | — | 重定向到 `/login` |
 
-守卫在 `src/router/index.js` 的 `beforeEach` 里，按这个顺序判断：
+守卫在 `src/router/index.ts` 的 `beforeEach` 里，按这个顺序判断：
 
 0. **先把过期的会话就地清掉** —— 只要本地存着一张已经过期的票，
    就 `clearSession()` + 记一句"登录已过期，请重新登录"，然后照常走下面两步。
@@ -51,11 +51,11 @@ npm run typecheck:fast # 类型检查：只查 .ts（TS 7 原生，快很多）
 
 ```
 src/
-├─ main.js                  # 入口：挂载根组件 + 引入全局样式 + use(router) + initTheme() + 注册 401 处理
+├─ main.ts                  # 入口：挂载根组件 + 引入全局样式 + use(router) + initTheme() + 注册 401 处理
 ├─ App.vue                  # 根组件：<RouterView> 路由出口 + 页面切换过渡（<Transition name="route">）
 ├─ env.d.ts                 # 让 TS 认识 .vue 模块 + 引入 vite/client 类型
 ├─ router/
-│  └─ index.js              # 路由表（/login、/register、/home）+ 双向守卫 beforeEach
+│  └─ index.ts              # 路由表（/login、/register、/home）+ 双向守卫 beforeEach
 ├─ styles/
 │  ├─ tokens.css            # ★ 设计令牌：两套皮肤（Terminal / Blueprint）的**唯一来源**。
 │  │                        #   颜色 / 字体 / 字距 / 动效值全在这里，组件样式禁止写字面颜色值
@@ -121,7 +121,7 @@ Vue 完全不知道主题变了，没有响应式更新、没有 DOM diff，只�
   不依赖 JS 跑成功。脚本炸了、`localStorage` 被禁用（Safari 隐私模式），页面照样有完整样式。
   这就是为什么 `setTheme('terminal')` 做的是 `removeAttribute` 而不是设值。
 - **`index.html` 里有一小段内联脚本**，在样式生效**之前**就把 `data-theme` 写到 `<html>` 上。
-  不能搬进 `main.js` —— 那是 module 脚本，要等 HTML 解析完才执行，中间几十毫秒正好是"灰→蓝"的闪跳窗口。
+  不能搬进 `main.ts` —— 那是 module 脚本，要等 HTML 解析完才执行，中间几十毫秒正好是"灰→蓝"的闪跳窗口。
   代价是 `gj-theme` 这个键名在两处重复出现（`index.html` + `utils/theme.ts`），改要一起改。
 - **`theme` 用模块级 `ref` 而不是普通变量**：切换按钮需要知道自己是不是选中态，那是界面状态。
   它不在任何组件里，因此天然全局单例 —— 不需要 pinia，也不需要 `provide/inject`。
@@ -136,20 +136,21 @@ Vue 完全不知道主题变了，没有响应式更新、没有 DOM diff，只�
 
 ## TypeScript
 
-**现状是"部分迁移"**，不是全量：
+**已全量迁移**（2026-10-09 完成），`src/` 下不再有 `.js` 文件：
 
 | 范围 | 状态 |
 |---|---|
-| `types/` `api/` `utils/` | ✅ 已是 `.ts`（纯逻辑、无模板，收益最高） |
-| `App.vue` `AppShell.vue` `PasswordInput.vue` `LoginView.vue` `RegisterView.vue` | ✅ 已加 `lang="ts"` |
-| `HomeView.vue` | ❌ 仍是纯 JS（见下面"还没做的"） |
-| `main.js` `router/index.js` | ❌ 仍是 `.js` |
+| `types/` `api/` `utils/` | ✅ `.ts`（纯逻辑、无模板，收益最高） |
+| `main.ts` `router/index.ts` | ✅ 已是 `.ts` |
+| 全部 `.vue`（含 `HomeView.vue` `ThemeMotion.vue`） | ✅ 均已加 `lang="ts"` |
 
-配置在 `tsconfig.json`：`strict: true`，同时开 `allowJs: true` + `checkJs: false`。
-**让 `.js` 和 `.ts` 暂时共存是故意的** —— 这样才能一个文件一个文件地迁，
-而不是一次性把整个项目改到编译不过。开 `strict` 则是为了把
-`sessionStorage.getItem()` 的 `string | null`、`JSON.parse()` 的 `any`、
-JWT 解码的 `unknown` 这些"平时只写在注释里的假设"全摊到明面上。
+迁移是**一个文件一个文件**做的，不是一次性全开。配置在 `tsconfig.json`：
+`strict: true`，同时保留 `allowJs: true` + `checkJs: false`（残留 `.js` 会被加载但不被检查）。
+开 `strict` 是为了把 `sessionStorage.getItem()` 的 `string | null`、
+`JSON.parse()` 的 `any`、JWT 解码的 `unknown` 这些"平时只写在注释里的假设"全摊到明面上。
+
+> ⚠️ **改文件扩展名后必须同步 `index.html` 的入口**：第 51 行是显式路径
+> `<script type="module" src="/src/main.ts">`，漏改这一步 dev 直接白屏。
 
 > **类型检查不并入 `npm run build`。** Vite 构建只做转译，不做类型检查；
 > 类型检查单独跑 `npm run typecheck`。分开的好处是类型报错不会拦住"我想先跑起来看看"。
@@ -180,13 +181,14 @@ npm run typecheck       →  vue-tsc
 等 TypeScript 7.1 补上新的 programmatic API（官方说在 7.0 之后 3~4 个月），
 这套双安装就能拆掉，直接装一个 `typescript` 即可。
 
-### 还没做的
+### 迁移时踩到的两类问题
 
-- **`HomeView.vue` 仍是纯 JS**：它单独有 **15 处**类型问题（隐式 any、`ref(null)` 被推断成
-  `never`、模板里 `profile` 可能为 null），等拆分这个文件时一起处理。
-  > 顺带一个可复用的做法：判断"该不该一次全开"要**先量**。给 6 个 `.vue` 全加 `lang="ts"`
-  > （代码一字不改）会报 19 处，只开 5 个是 4 处 —— 先量再决定，而不是凭感觉。
-- `main.js` / `router/index.js` 未迁。路由名与参数的类型化收益一般，优先级低于业务代码。
+- **隐式 any / 空值**：函数参数（`pad(n)`、`toClock(totalSeconds)`）、`ref(null)` 被推断成
+  `never`（改成 `ref<UserProfile | null>(null)`）、`catch` 到的 `error` 判 `instanceof TypeError`。
+- **模板里的空值**：`HomeView` 的模板直接访问 `profile.id`，而 TS 不知道它与 `status` 的关联，
+  用 `profile && profile.id` 做保护性访问（与 `LoginView` 里 `json.data !== null` 的写法一致）。
+- 一个**可复用**的做法：判断"该不该一次全开"要**先量**。给 6 个 `.vue` 全加 `lang="ts"`
+  （代码一字不改）会报 19 处，只开 5 个是 4 处 —— 先量再决定，而不是凭感觉。
 
 ## 认证是怎么接进来的
 
@@ -202,11 +204,11 @@ headers: {
 
 - **发请求时自动带上** `Authorization: Bearer <token>`，业务代码里一行都不用写；
 - **收到 401 时**（后端返回 `code` 1005 / 1006 / 1007）自动 `clearSession()`，并把
-  "为什么失效"传给 `main.js` 注册进来的处理函数，由它记下提示再跳回登录页。
+  "为什么失效"传给 `main.ts` 注册进来的处理函数，由它记下提示再跳回登录页。
 
 关键设计：`request.ts` **不 import router**，因为它和 router 会形成循环依赖
 （`request.ts → router → views → api → request.ts`）。它只导出一个 `setUnauthorizedHandler()`，
-由 `src/main.js` 在启动时把"跳回登录页"这个动作注册进去 —— 依赖方向始终从上往下，不绕圈。
+由 `src/main.ts` 在启动时把"跳回登录页"这个动作注册进去 —— 依赖方向始终从上往下，不绕圈。
 
 另外注意：**HTTP 状态码 401 并不影响前端的判断逻辑**。
 后端把 401 的响应体也做成了统一的 `{ code, message, data }`，

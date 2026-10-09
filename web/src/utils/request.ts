@@ -65,14 +65,14 @@ const SESSION_LOST_NOTICES: Record<number, string | undefined> = {
  * 换个思路就干净了：这里只负责**宣布**"会话没了"，
  * 至于怎么跳转（用 router 还是 location.href），由入口文件决定。
  * 这叫"依赖倒置"——底层不反过来依赖上层，而是上层把动作注册进来。
- * 注册的动作在 src/main.js 里完成。
+ * 注册的动作在 src/main.ts 里完成。
  */
 type UnauthorizedHandler = (reason: string) => void
 
 let unauthorizedHandler: UnauthorizedHandler | null = null
 
 /**
- * 注册"会话失效"的回调。由 main.js 调用，业务代码不需要关心。
+ * 注册"会话失效"的回调。由 main.ts 调用，业务代码不需要关心。
  *
  * 回调会收到一个字符串参数：要展示给用户的失效原因（没有原因时是空字符串）。
  * 这样"怎么跳转"和"怎么记提示"两件事都留在上层，这一层只负责判定和宣布。
