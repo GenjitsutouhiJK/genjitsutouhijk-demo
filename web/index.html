@@ -2,9 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GENJITSUTOUHIJK / TERMINAL</title>
+
+    <!-- ============================================================
+         地址栏配色（**不是图标**，别跟着图标一起删）
+         ============================================================
+         安卓 Chrome 拿它给地址栏 / 任务卡片上色。取值取自 Terminal 皮肤的墨色，
+         与 src/styles/tokens.css 里的 `--ink` 是同一个值。
+
+         ⚠️ 2026-10-09 按用户要求移除了整套站点图标：
+            web/public/（favicon.ico / favicon.svg / apple-touch-icon.png /
+            icon-{16,32,48,180,192,512}.png / site.webmanifest）、生成脚本
+            scripts/build-icons.py，以及本文件里的 4 个 <link>。
+            现无任何 <link rel="icon">，标签页显示浏览器默认图标。
+         ⚠️ 浏览器仍会自动请求 /favicon.ico → dev 控制台会有一条 404，无功能影响。
+            想消掉它，加一行 `<link rel="icon" href="data:," />` 即可（空图标，非文件）。
+         ============================================================ -->
+    <meta name="theme-color" content="#3e4247" />
 
     <!-- ============================================================
          主题预置：消除首屏闪跳

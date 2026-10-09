@@ -51,14 +51,21 @@ npm run typecheck:fast # 类型检查：只查 .ts（TS 7 原生，快很多）
 
 ```
 src/
-├─ main.js                  # 入口：挂载根组件 + 引入全局样式 + use(router)
+├─ main.js                  # 入口：挂载根组件 + 引入全局样式 + use(router) + initTheme() + 注册 401 处理
 ├─ App.vue                  # 根组件：<RouterView> 路由出口 + 页面切换过渡（<Transition name="route">）
 ├─ env.d.ts                 # 让 TS 认识 .vue 模块 + 引入 vite/client 类型
 ├─ router/
 │  └─ index.js              # 路由表（/login、/register、/home）+ 双向守卫 beforeEach
 ├─ styles/
-│  └─ main.css              # 全局样式：设计令牌、动效令牌与全部关键帧、共用版式块
+│  ├─ tokens.css            # ★ 设计令牌：两套皮肤（Terminal / Blueprint）的**唯一来源**。
+│  │                        #   颜色 / 字体 / 字距 / 动效值全在这里，组件样式禁止写字面颜色值
+│  ├─ fonts.css             # @font-face：自托管的 Playfair Display（拉丁 + 拉丁扩展），Blueprint 用
+│  └─ main.css              # 结构与组件样式：动效令牌与全部关键帧、共用版式块
 │                           #   （.panel / .status / .form-switch 等）、按钮体系、路由过渡、减少动效开关
+│                           #   ⚠️ 前两行 @import 了 fonts.css + tokens.css，是全局样式的真正入口
+├─ assets/
+│  ├─ fonts/                # Playfair Display 的 woff2 ×2 + OFL.txt（SIL 授权，分发时须保留）
+│  └─ theme/                # Blueprint 皮肤的装饰素材（16 张 png），**只**被 ThemeDecor.vue 引用
 ├─ types/
 │  └─ api.ts                # ★ 前后端契约的类型镜像（ApiResponse / LoginResponse /
 │                           #   UserProfile / JwtPayload / ErrorCode）。手写，不是自动生成
@@ -66,19 +73,62 @@ src/
 │  ├─ session.ts            # 会话状态：setSession / clearSession / isLoggedIn
 │  │                        #   + readTokenPayload / isTokenExpired（本地读过期时间）
 │  │                        #   + setNotice / takeNotice（跨页面的一次性提示，读一次即清）
+│  ├─ theme.ts              # ★ 主题切换入口：THEMES / theme / setTheme / toggleTheme / initTheme
+│  │                        #   模块级 ref 充当全局单例；只改 <html> 的 data-theme，不重渲染组件
 │  └─ request.ts            # 请求封装：BASE_URL、JSON 处理、自动带 Authorization 头、凭证失效处理
 ├─ api/
 │  ├─ auth.ts               # 接口定义层：只声明 login() / register() 调哪个接口、传什么
 │  └─ user.ts               # getMe()：取当前登录用户资料（受保护接口）
 ├─ components/
-│  ├─ AppShell.vue          # 页面外壳：背景/水印/准星/顶栏/底栏，页面内容通过 <slot> 填入
-│  └─ PasswordInput.vue     # 可复用组件：带"显示/隐藏"的密码输入框
+│  ├─ AppShell.vue          # 页面外壳：背景/水印/准星/顶栏/底栏 + 主题切换器，内容通过 <slot> 填入
+│  ├─ PasswordInput.vue     # 可复用组件：带"显示/隐藏"的密码输入框
+│  ├─ ThemeDecor.vue        # Blueprint 专属装饰层：靠 --decor 令牌整体显隐（Terminal 下 opacity 0）
+│  └─ ThemeMotion.vue       # ThemeDecor 里的矢量几何动效层，**被 ThemeDecor 引用**，不直接挂载
 └─ views/
    ├─ LoginView.vue         # 登录页：表单 + "上一次为什么被带回来"的提示 + 成功后 setSession 并跳转 /home
    ├─ RegisterView.vue      # 注册页：多一个"确认密码"字段，注册即登录，成功后同样跳 /home
    └─ HomeView.vue          # 主页：核验闸门（Verifying / Unverified）→ 通过后才渲染
                             #   身份卡（含凭证寿命条）+ 四格指标 + 双栏对照 + 顶栏退出
 ```
+
+> 前端的**静态资源目录 `public/` 不存在** —— 2026-10-09 按用户要求移除了整套站点图标，
+> `public/` 与生成脚本 `scripts/build-icons.py` 已一并删除，`index.html` 里没有任何 `<link rel="icon">`。
+> `vite.config.js` 没配 `publicDir`（默认值就是 `public`），**目录不存在时 Vite 静默跳过，不会报错**。
+
+## 主题：两套皮肤共存
+
+界面有 **Terminal**（默认，灰阶 + 深灰实心块）和 **Blueprint**（蓝图线框，冷白 + 蓝色细线）两套皮肤，
+切换器在顶栏（`AppShell.vue` 的 `.theme-switch`）。
+
+核心设计是**主题不改任何组件代码**，只改 `<html>` 上的一个属性：
+
+| `<html>` 属性 | 生效的皮肤 | 令牌来源 |
+|---|---|---|
+| 无（默认） | Terminal | `styles/tokens.css` 的 `:root` |
+| `data-theme="blueprint"` | Blueprint | 同文件的 `[data-theme='blueprint']` 块 |
+
+组件样式里写的全是 `var(--xxx)`，于是**同一份 DOM 自动长成两种样子，零组件重渲染** ——
+Vue 完全不知道主题变了，没有响应式更新、没有 DOM diff，只有一次样式重算。
+所以切换是瞬时的，页面里的定时器、正在倒数的凭证寿命、输入框里没提交的内容全部原封不动。
+
+几个刻意的取舍：
+
+- **默认皮肤不写成 `[data-theme="terminal"]`，而是放在 `:root` 里** —— `:root` 永远生效，
+  不依赖 JS 跑成功。脚本炸了、`localStorage` 被禁用（Safari 隐私模式），页面照样有完整样式。
+  这就是为什么 `setTheme('terminal')` 做的是 `removeAttribute` 而不是设值。
+- **`index.html` 里有一小段内联脚本**，在样式生效**之前**就把 `data-theme` 写到 `<html>` 上。
+  不能搬进 `main.js` —— 那是 module 脚本，要等 HTML 解析完才执行，中间几十毫秒正好是"灰→蓝"的闪跳窗口。
+  代价是 `gj-theme` 这个键名在两处重复出现（`index.html` + `utils/theme.ts`），改要一起改。
+- **`theme` 用模块级 `ref` 而不是普通变量**：切换按钮需要知道自己是不是选中态，那是界面状态。
+  它不在任何组件里，因此天然全局单例 —— 不需要 pinia，也不需要 `provide/inject`。
+  ⚠️ 分清两件事：ref 是**给界面看**的（按钮高亮），`<html>` 上的属性是**给浏览器看**的（真正的样式来源），
+  `apply()` 负责让后者跟上前者；少这一步的表现是"按钮亮了但页面没变"。
+- 加第三套皮肤只需两步：① `tokens.css` 里加一个 `[data-theme=...]` 块；② `theme.ts` 的 `THEMES` 加一行。
+  **样式和组件都不用动。**
+
+> ⚠️ **`tokens.css` 里的硬规则**：组件样式里**不允许**出现字面颜色值（`#xxx` / `rgba(...)`），一律引用令牌。
+> 判据很简单 —— 想让某个颜色在两套主题下不一样，就必须把它做成令牌；做不成就说明那处写法有问题。
+> 想改配色请去 `tokens.css`，**不要**在 `main.css` 或组件里写死。
 
 ## TypeScript
 

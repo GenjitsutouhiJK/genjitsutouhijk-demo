@@ -14,7 +14,7 @@
 | 认证 | Spring Security 7 + JWT（JJWT 0.13） | 无状态认证：登录发一张签名 token，之后每个请求自带；默认拒绝 + 自定义 401 响应 |
 | 数据库 | H2（文件模式）+ Spring Data JPA + Flyway | 零安装，不用装数据库服务；建表由 Flyway 的 SQL 脚本管理，换库只改配置 |
 | 密码存储 | Spring Security 的 BCrypt | 库里只存哈希，不存明文 |
-| 前端 `web/` | Vite + Vue 3 + Vue Router 4 + TypeScript | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫；纯逻辑层（api/utils/types）已迁 TS |
+| 前端 `web/` | Vite + Vue 3 + Vue Router 4 + TypeScript | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫；纯逻辑层（api/utils/types）已迁 TS；两套可切换皮肤（Terminal / Blueprint） |
 | 通信 | 基于 `fetch` 的封装 + Spring CORS | 请求后端 `http://localhost:8080`，接口路径以 `/api` 开头，自动带 `Authorization` 头 |
 
 ## 仓库结构
@@ -64,25 +64,34 @@ genjitsutouhijk-demo/
 │        └─ resources/application-test.properties  测试专用配置（内存数据库 + 独立 JWT 密钥）
 └─ web/                     前端（Vue 3）
    ├─ README.md             前端专属说明
-   ├─ index.html            入口 HTML
+   ├─ index.html            入口 HTML（含防主题闪跳的内联脚本；**无任何站点图标**，见"已知事项"）
    ├─ vite.config.js        Vite 配置
    ├─ tsconfig.json         TypeScript 配置（strict；类型检查不并入 build）
    └─ src/
-      ├─ main.js            应用入口：createApp + .use(router) + 注册 401 处理
+      ├─ main.js            应用入口：createApp + .use(router) + initTheme() + 注册 401 处理
       ├─ env.d.ts           .vue 模块声明 + vite/client 类型
       ├─ App.vue            根组件：<RouterView> 出口 + 页面切换过渡
       ├─ router/index.js    路由表 + 登录守卫
-      ├─ styles/main.css    设计令牌 + 动效令牌与全部关键帧 + 共用版式块（全局）
+      ├─ styles/
+      │  ├─ tokens.css      ★ 设计令牌：两套皮肤（Terminal / Blueprint）的唯一来源
+      │  ├─ fonts.css       自托管字体 @font-face（Playfair Display，Blueprint 用）
+      │  └─ main.css        结构与组件样式：动效令牌与全部关键帧 + 共用版式块（全局）
+      ├─ assets/
+      │  ├─ fonts/          Playfair Display 的 woff2 + OFL.txt（授权）
+      │  └─ theme/          Blueprint 皮肤的装饰素材（16 张 png）
       ├─ types/api.ts       前后端契约的类型镜像（手写，非自动生成）
       ├─ utils/
       │  ├─ session.ts      跨页面会话状态（ref + sessionStorage）
+      │  ├─ theme.ts        ★ 主题切换入口（THEMES / theme / setTheme / initTheme）
       │  └─ request.ts      基于 fetch 的请求封装（BASE_URL、自动带 token、处理 401）
       ├─ api/
       │  ├─ auth.ts         登录 / 注册接口
       │  └─ user.ts         当前用户资料接口
       ├─ components/
-      │  ├─ AppShell.vue    页面外壳（背景/水印/准星/顶栏/底栏 + 插槽）
-      │  └─ PasswordInput.vue  带"显示/隐藏"的密码输入框
+      │  ├─ AppShell.vue    页面外壳（背景/水印/准星/顶栏/底栏 + 主题切换器 + 插槽）
+      │  ├─ PasswordInput.vue  带"显示/隐藏"的密码输入框
+      │  ├─ ThemeDecor.vue  Blueprint 专属装饰层（靠 --decor 令牌显隐）
+      │  └─ ThemeMotion.vue ThemeDecor 里的矢量几何动效层
       └─ views/
          ├─ LoginView.vue    登录页
          ├─ RegisterView.vue 注册页（多一个"确认密码"字段）
@@ -189,6 +198,17 @@ npm run typecheck # 类型检查（含 .vue）
 界面基调是"仪表盘 / 终端"：浅灰底 + 白色面板 + 深灰实心条 + 1px 发丝线，
 零圆角、零投影、纯灰阶，大写字母 + 宽字距。
 
+**同时有两套皮肤**，顶栏右上角的切换器可以来回切（选择记在 `localStorage`）：
+
+| 皮肤 | 视觉语言 |
+|---|---|
+| **Terminal**（默认） | 灰阶终端，深灰实心块，强调色 `#3e4247` |
+| **Blueprint** | 蓝图线框，冷白偏青底 + 蓝色细线，强调色 `#285ca7`，取消实心块、改描边 |
+
+实现上**主题不改任何组件代码**，只改 `<html>` 上的 `data-theme` 属性；
+颜色全走 `styles/tokens.css` 的 CSS 变量，所以两套皮肤共用同一份 DOM、切换**不触发组件重渲染**。
+令牌与切换逻辑见 [`web/README.md#主题两套皮肤共存`](web/README.md#主题两套皮肤共存)。
+
 动效只在两种性格里选，**刻意不用会回弹的曲线**（零圆角的直角版面配弹跳会显得轻浮）：
 
 - **机械**（快起步、慢收尾）—— 页面切换淡入淡出、面板从下方浮起、指标格依次落位、
@@ -231,6 +251,10 @@ npm run typecheck # 类型检查（含 .vue）
 - 登录 → 拿 token → 跳转主页 → 主页展示会话数据 → 退出登录，完整闭环；
 - 注册页填用户名 / 密码 / 确认密码，成功后同样拿到凭证进主页；
 - 路由守卫双向生效：未登录不能进主页，已登录也不会停在登录 / 注册页。
+- **前端视觉体系**：颜色 / 字体 / 字距 / 动效值全部收进 `styles/tokens.css`，界面据此出两套皮肤
+  （Terminal 灰阶实心 / Blueprint 蓝图线框），顶栏一键切换、选择持久化，**切换不重渲染组件**。
+  新增 `ThemeDecor` / `ThemeMotion` 两个组件承载 Blueprint 专属的装饰层与几何动效。
+- **站点图标已整体移除**（2026-10-09，用户认为原图标不好看）：`web/public/` 与生成脚本一并删除，详见"已知事项"。
 - **后端里程碑 ①**：Controller / Service 分层，全局异常处理 + 参数校验，错误码收进 `ErrorCode` 字典。
   对外接口行为完全不变。
 - **后端里程碑 ②**：接上数据库（H2 文件模式）。
@@ -272,5 +296,8 @@ npm run typecheck # 类型检查（含 .vue）
   同目录下的 `*.trace.db` 只是诊断日志，可以单独删掉；`.mv.db` 才是数据库本体，**不能删**。
 - `spring-boot-starter-flyway` 启动时会警告 `H2 2.4.240 which is newer than the version Flyway has been verified with`。
   **这是正常现象**：Boot 4.1.1 受管的 H2 版本比当前 Flyway 官方验证过的版本新一点，实测迁移功能正常，可以忽略。
-- `web/src/assets/` 下的 `hero.png` / `vite.svg` / `vue.svg` 以及 `web/public/icons.svg` 是脚手架残留，没有任何代码引用，可删。
+- 脚手架残留（`web/src/assets/` 下的 `hero.png` / `vite.svg` / `vue.svg`、`web/public/icons.svg`）已清理完毕。
+  **整套站点图标也已于 2026-10-09 整体移除**：`web/public/`（favicon / apple-touch-icon / 各尺寸 PNG /
+  site.webmanifest）、生成脚本 `web/scripts/build-icons.py`、`index.html` 里的 4 个 `<link>`。现前端**没有任何图标**，
+  标签页显示浏览器默认图标；`index.html` 里仅保留 `theme-color`（地址栏配色，不是图标）。
 - `server/pom.xml` 里的 **Lombok** 依赖目前仍然完全没用到（DTO 都用 `record`，实体类手写 getter），属脚手架残留，可删。
