@@ -72,9 +72,19 @@
  * 于是这块装饰从"好看但无意义"变成"一块会说话的信息"，
  * 而且顺带解决了一件事：**用户能立刻确认自己没敲错名字**。
  *
- * ★ 空值时这块**彻底留白**，不回落成原来的字母。
- *   那两个字母本来就是"没有含义"才被换掉的，留着当兜底等于白换一场。
+ * ★ 空值时**不回落成原来的字母，也不彻底留白** —— 只留末尾那个闪烁的下划线。
+ *   那两个字母本来就是"没有含义"才被换掉的，留着当兜底等于白换一场；
+ *   但整块留白又太哑：这一格在登录/注册页就是"名字输入位"的镜像，
+ *   空着应该像终端一样**闪着等着你敲**，而不是什么都没有。
+ *   所以空输入 = 一条在起点闪动的光标（字符数为 0，字号算式自动只算它这一笔）。
  *   字体仍用衬线体 —— 换掉内容，但不换调子。
+ *
+ * ★ **两种节奏，别混**（脚本里"打字机的这一批"那一节是全部依据）：
+ *   ① 整串一次性揭示（主页核验回来的用户名 / 粘贴）→ 逐字错峰，光标等末字落定才登场；
+ *   ② 用户逐键敲 → 该字符**立刻落笔**，光标一直亮着、贴在已出现文字的末尾。
+ *   混掉的后果实测过：每多敲一个字就多等一格（第 5 个字符 928ms 才露面），
+ *   而光标早已蹲在整串终点上（探针实测超前 115px、55.6% 的帧都超前）——
+ *   既不像打字机，更不像输入框。
  *
  * ★ 右下角原本那个 S 的位置**直接空出来**，不拿首字母去填。
  *   理由是同一个：要的是"没有字母"，不是"换个字母"。
@@ -90,7 +100,7 @@
  *   1414px 的窗口下，登录页左侧有 391px 可铺，主页只剩 131px。
  *   同一个位置、相差三倍的空间，写死任何一个字号都必然有一边出错。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ThemeMotion from './ThemeMotion.vue'
 
 const props = withDefaults(
@@ -160,6 +170,20 @@ const fontReady = ref(false)
 /** 字距。必须和 CSS 里的 `letter-spacing` 一致 —— 量宽度时要把它算进去。 */
 const ID_TRACKING = 0.05
 
+/**
+ * 末尾那个「待输入」光标占用的横向宽度（em）。
+ *
+ * ★ 它只用于量宽，不参与渲染 —— 但**必须**补进 idEmWidth，理由是：
+ *   `.d-id` 上有 `max-width: max(0px, var(--avail))` + `overflow: hidden`
+ *   这道兜底闸门，而字号又正是按 --em 反算出来的。
+ *   漏算这一笔，光标就会正好悬在右边界外被裁掉。
+ *   ⚠️ 而且它**只裁长 ID**（5% 余量被摊得越薄越不够用），短 ID 反而看不出问题 ——
+ *   这类"只在边界条件上发作"的错最难查，所以宁可多留一点。
+ *
+ * 对应 CSS 里 .d-id-caret 的 `0.36em` 宽 + `0.04em` 左边距。
+ */
+const CARET_EM = 0.4
+
 /** 量宽度用的基准字号。挑 100 是因为量完除以 100 就直接是"占多少个 em"。 */
 const PROBE_SIZE = 100
 
@@ -185,10 +209,42 @@ const MAX_CHARS = 20
 const idChars = computed(() =>
   [...(props.identifier ?? '').trim().toUpperCase()].slice(0, MAX_CHARS),
 )
-const hasId = computed(() => idChars.value.length > 0)
 
 /**
- * 这一串 ID 在当前字体下总共占多少「em」（1em = 一个字号）。
+ * ================== 打字机的"这一批" ==================
+ *
+ * 错峰揭示只该发生在**一次性出现一整串**的时候（主页核验回来的用户名、粘贴）。
+ * 用户逐键敲进来时，每个字符都该**立刻落笔**。
+ *
+ * ★ 原来的实现没区分这两件事：--i 用的是**绝对下标**，而 span 是敲键那一刻才新建的，
+ *   于是每多敲一个字就多等一格 —— 探针实测第 5 个字符要 928ms 才露面，
+ *   而光标早就在整串末尾等着了（超前最多 115px，55.6% 的帧都超前）。
+ *   既不像打字机，更不像输入框，只是"延迟随长度线性增长"。
+ *
+ * 所以这里算出"这一批新增的是哪一段"，--i 改成**相对本批**的序号：
+ * 单键敲下的字符 --i = 0（立刻动），整串设进来才 0,1,2… 错峰。
+ * 旧字符拿到负数 --i，延迟只会更小 —— 它们的动画早就跑完、停在终态，不会被重放。
+ */
+const revealFrom = ref(0)
+const revealCount = ref(idChars.value.length) // 首次渲染就当"一批"（主页可能一上来就有名字）
+/** 只有"整段揭示"才换这个 key —— 见模板里光标的 :key 说明。 */
+const caretGen = ref(0)
+
+watch(idChars, (now, before) => {
+  const b = before ?? []
+  let common = 0
+  while (common < now.length && common < b.length && now[common] === b[common]) common++
+  revealFrom.value = common
+  revealCount.value = Math.max(0, now.length - common)
+  // 单个字符的即时敲击**不**让光标重新登场：输入框里那根线不该一闪一闪地消失。
+  if (revealCount.value > 1) caretGen.value++
+})
+
+/** 用户正在逐键敲（既不是空白态，也不是整串一次性揭示）。 */
+const isLive = computed(() => revealCount.value === 1 && idChars.value.length > 0)
+
+/**
+ * 量一段文字在当前字体下占多少「em」（1em = 一个字号）。
  *
  * ★ 为什么不用"每字符平均宽度 × 字符数"估？
  *   大写衬线体的字宽从 I 的 0.33em 到 W 的 0.94em，差了近三倍。
@@ -196,16 +252,18 @@ const hasId = computed(() => idChars.value.length > 0)
  *   所以直接拿 canvas 的 measureText 量真实字形宽度 ——
  *   同一个字体栈、同一个字号，量出来就是浏览器真的会画多宽。
  *
- * canvas 取不到（老环境）时退回"每字符 0.72em"的经验值：
- * 宁可小一点，也不能压到面板上。
+ * canvas 取不到（老环境）时退回"每字符 0.72em"的经验值：宁可小一点，也不能压到面板上。
+ *
+ * ★ 结果里**已经含字距**（letter-spacing 在**每个**字符后面都会加一份，末字也不例外）。
+ * ★ 字号（idEmWidth）和"未落定字符让位"（pendingCharEm）共用这一套度量 ——
+ *   两处各量各的话，哪天改了字体就会一处对一处错，而且错得很隐蔽。
  */
-const idEmWidth = computed(() => {
-  const text = idChars.value.join('')
+function measureEm(text: string): number {
   if (!text) return 0
 
   // ★ 依赖 fontReady：字体到位后会重新算一次。
-  //   字体没就绪时下面量到的是回落字体的宽度，先渲染出来，
-  //   等字体好了再默默纠正 —— 用户看到的只是字号"轻轻对了一下"。
+  //   字体没就绪时量到的是回落字体（Georgia）的宽度，先渲染出来，
+  //   等字体好了再默默纠正 —— 用户看到的只是"字号轻轻对了一下"。
   void fontReady.value
 
   let glyphs = 0
@@ -221,15 +279,38 @@ const idEmWidth = computed(() => {
   }
   if (!glyphs) glyphs = text.length * 0.72
 
-  // 字距：letter-spacing 在**每个**字符后面都会加一份，末字也不例外
-  const tracked = glyphs + text.length * ID_TRACKING
+  return glyphs + text.length * ID_TRACKING
+}
 
+/** 整串 ID 的宽度 + 末尾光标那一笔。空串也有值（只剩光标），见下面的 ⚠️。 */
+const idEmWidth = computed(() => {
+  // ⚠️ 空串**不能提前 return 0**。--em 是字号算式的除数（calc(--avail / --em)），
+  //   除以 0 在 CSS 里属"计算值无效"，font-size 会整个失效掉回继承值 ——
+  //   表现是光标突然缩成十几 px 的一小点，而且不报任何错。
+  //   所以空串也照常往下走：measureEm('') 是 0，最后只剩 CARET_EM 那一笔 ——
+  //   正好就是"空输入只剩光标"要的结果。
+  //   （顺带一个好处：空串的 em 极小，字号会顶到 52px 上限，和输入一两个字符同一档 ——
+  //     敲下第一个字符时字号不会跳。）
+  //
   // ★ 再留 5% 余量。canvas 量的是字形宽度，真实排版还会有 kerning 之类的细微差别。
   //   宁可小 5%，也不能因为算大了一点点被切掉半个字母 ——
   //   蓝图的 .panel 是半透明白底（--surface: rgba(255,255,255,.62)），
   //   溢出去的部分会**透出来**，比字小一点难看得多。
-  return tracked * 1.05
+  return (measureEm(idChars.value.join('')) + CARET_EM) * 1.05
 })
+
+/**
+ * 本批新增的那个字符占多宽（em）—— 交给 CSS 让它**先不占地方**（见 .d-id-ch 的 id-occupy）。
+ *
+ * ★ 这是"输入框手感"的关键：新字符刚落笔时不让位，它右边的所有东西（包括末尾那根光标）
+ *   就还停在原来的位置 —— 光标于是正好贴在**已经出现的那段文字**末尾，
+ *   再随这个字一起往右让开。
+ *   整串揭示时给 0：那时字符是错峰落位的，逐个让位会互相压住
+ *   （前一个还没让开，后一个已经挤上来了）。
+ */
+const pendingCharEm = computed(() =>
+  isLive.value ? measureEm(idChars.value[idChars.value.length - 1] ?? '') : 0,
+)
 
 /**
  * 相邻两个字符之间的间隔。
@@ -238,9 +319,11 @@ const idEmWidth = computed(() => {
  *   最后一个字 1.66 秒才露面 —— 装饰抢在了内容前面，等得人心焦。
  *   所以改成"总时长封顶 620ms"：短 ID（≤9 字）保持 70ms 的从容节奏，
  *   长 ID 自动压缩间隔。字符越多、每个越快，整体像是"一扫而过"。
+ *
+ * ★ 按**本批新增的个数**算，不是总长度：单键敲击时这一批只有 1 个字符，间隔无关紧要。
  */
 const idStep = computed(() => {
-  const n = idChars.value.length
+  const n = revealCount.value
   return n > 1 ? Math.min(70, Math.round(620 / n)) : 70
 })
 
@@ -248,6 +331,11 @@ const idStep = computed(() => {
 const idStyle = computed(() => ({
   '--step': idStep.value + 'ms',
   '--em': String(idEmWidth.value),
+  // **本批新增的字符个数**（不是总数）。末尾光标的出场时机按它算：
+  // (n-1) * --step + 末字的起点与时长 —— 见 CSS 里的 --caret-delay。
+  // 把个数交给 CSS、公式整条留在样式里，改一处就够。
+  // ⚠️ 空白态这里是 0，CSS 那边必须 max(n - 1, 0)，否则会算出一个负的延迟。
+  '--n': String(revealCount.value),
   '--id-font': ID_FONT,
   '--id-weight': String(ID_WEIGHT),
 }))
@@ -287,16 +375,29 @@ const idStyle = computed(() => ({
 
     <!-- 身份标识：取代原先那两个无含义的衬线字母 E / S。
          横排、字号自适应，位置守在原来 E 的那一格。
-         只在有 ID 时出现；空输入时这里**整块留白**，不回落成字母 ——
-         要的是"没有字母"，不是"换个字母"。 -->
-    <div v-if="hasId" class="d-id" :style="idStyle">
+         ★ 一个字都没输入时**也照样渲染这一块** —— 此时它只剩末尾那个闪动的
+         下划线，落在起点（第一个字符将要出现的地方），就是"这里可以输入"的信号。
+         所以这里没有 v-if：给空值留白等于把信号也一起留掉了。
+         d-id--live = 用户正在逐键敲（见 isLive）：字符立刻落笔，光标不重新登场。 -->
+    <div class="d-id" :class="{ 'd-id--live': isLive }" :style="idStyle">
       <span
         v-for="(ch, i) in idChars"
         :key="i"
         class="d-id-ch"
-        :style="{ '--i': String(i) }"
+        :style="{
+          '--i': String(i - revealFrom),
+          '--w': i === idChars.length - 1 ? pendingCharEm + 'em' : '0em',
+        }"
         >{{ ch }}</span
       >
+      <!-- 末尾那个「待输入」光标：一条一直在闪的下划线。
+           正常情况它跟在最后一个字符后面；一个字都没输入时它落在起点。
+           ★ :key 只在**整段揭示**时变化（caretGen）——
+           那时光标要"等末字落定"才登场，所以得让动画重新开始计时；
+           而单个字符的敲击**不**换 key：输入框里那根线应该一直在，不该一闪一闪地消失。
+           它不在 idChars 里，所以不参与打字的错峰，也不参与量宽
+           （宽度单独补在 idEmWidth 里，否则会被 .d-id 的 overflow: hidden 裁掉）。 -->
+      <span :key="caretGen" class="d-id-caret"></span>
     </div>
 
     <div class="d-title"></div>
@@ -584,6 +685,20 @@ const idStyle = computed(() => ({
   /* 减掉纵轴与刻度占掉的 92px，再留 20px，让字不贴着面板边框 */
   --avail: calc(var(--gutter) - 92px - 20px);
 
+  /* ★ 打字的时间常量。抽出来是因为末尾的光标要**算**出"末字什么时候落定"。
+     写成字面量也行，但那个数是从这两条推出来的；
+     一旦有人把 --type-dur 调了，光标就会悄悄地早到或迟到，很难发现。 */
+  --type-lead: 0.34s; /* 起点偏移：等装饰层自己淡入完再开始打字 */
+  --type-dur: 0.34s; /* 单个字符从自己左下角升起来的时长 */
+  /* ★ 光标什么时候登场。"末字落定那一刻" = 末字的起点 (n-1) * --step + --type-lead，
+     再加它自己的时长。n 是**本批新增**的字符数（见脚本里的 revealCount）。
+     max(n - 1, 0) 是给空白态准备的：那时 --n = 0，压根没有"末字"，
+     光标自己就是这一行的第一个东西，让它等价于 n = 1。
+     少了这个 max 会算出负延迟（-70ms + 0.68s），虽然也能跑，但式子读起来就是错的。 */
+  --caret-delay: calc(
+    max(var(--n, 1) - 1, 0) * var(--step, 70ms) + var(--type-lead) + var(--type-dur)
+  );
+
   position: absolute;
   left: 92px;
   top: calc(26% + 63px);
@@ -594,7 +709,10 @@ const idStyle = computed(() => ({
   /* 字号 = 可用宽度 ÷ 这串 ID 实际占的 em 数（--em 由脚本量出来传进来）。
      上限 52px：短 ID 不至于撑得比原来的 E 还大，把版面压垮。
      下限 2px 只是防负数（窗口窄到面板已经越过 92px 时 --avail 会为负），
-     那种情况靠下面的 max-width 把它整块收掉，而不是让它溢出去。 */
+     那种情况靠下面的 max-width 把它整块收掉，而不是让它溢出去。
+     ★ 空输入时 --em 只剩光标那一笔（约 0.42），会顶到 52px 上限 ——
+     和输入一两个字符同一档，所以敲下第一个字符时字号不会跳
+     （空串绝不能返回 em = 0，那是除零，见 idEmWidth）。 */
   font-size: max(2px, min(52px, calc(var(--avail) / var(--em))));
   letter-spacing: 0.05em;
   line-height: 1.2;
@@ -611,18 +729,51 @@ const idStyle = computed(() => ({
   overflow: hidden;
 }
 
+/* ==================================================================
+ * 逐键敲击（不是整串揭示）
+ * ==================================================================
+ * 用户正在一个字一个字地敲进输入框 —— 此时**不能**按打字机的节奏走：
+ *
+ * ★ 字符必须立刻落笔。原来的实现在这里每敲一个字要多等一格
+ *   （延迟 = 下标 × --step + 0.34s），第 5 个字要 928ms 才露面。
+ *   探针实测过：这既不像打字机，也不像输入框。
+ *   现在 --i 是相对本批的序号（单键 = 0），于是延迟只剩这一条 0.06s 的小起手。
+ * ★ 时长压到 0.18s：0.34s 是"揭示一整串"的从容节奏，逐键敲击要的是跟手。
+ * ★ 光标 --caret-delay: 0s —— 它不该等末字落定，那 0.18s 里它正在
+ *   **贴着已出现的文字** 往右让位（靠 .d-id-ch 的 id-occupy），
+ *   等一等再出现反而成了"闪一下就不见"。
+ * ================================================================== */
+.d-id--live {
+  --type-lead: 0.06s;
+  --type-dur: 0.18s;
+  --caret-delay: 0s;
+}
+
 /* 打字机就是这么来的：每个字符一个 span，靠 --i 把延迟逐个错开。
-   --step（相邻间隔）由脚本按字符数算好传进来 —— 见 idStep 的说明，
-   写死 70ms 会让长用户名排到 1.6 秒才结束。
-   起点延迟 0.34s 是**等装饰层自己淡入完**再开始 ——
+   --i 是**相对本批**的序号（见脚本里的 revealFrom）：
+   整串揭示时是 0,1,2…（错峰），用户敲单键时它就是 0（立刻动）。
+   --step（相邻间隔）由脚本按本批字符数算好传进来 —— 见 idStep 的说明。
+   起点延迟是 --type-lead：**等装饰层自己淡入完**再开始 ——
    否则字会先于底图出现，看起来像"贴上去的"，不是"画出来的"。
    曲线用 --ease-out（tokens 里的"① 机械"性格），不用弹跳。
-   transform-origin 定在左下角：每个字从自己的左下角长出来，像被"写"上去。 */
+   transform-origin 定在左下角：每个字从自己的左下角长出来，像被"写"上去。
+
+   ★ 第二条动画 id-occupy 是"输入框手感"的关键：还没落定的字符**先不占地方**，
+     margin-right 从 -自己宽度 涨到 0，于是它右边的所有东西（含末尾光标）
+     随着它一起往右让位。光标因此永远贴在**已经出现的那段文字**末尾，
+     而不是提前蹲在整串的终点上。
+     --w 由脚本按 canvas 量出的字形宽度给，只有"刚敲下的那一个字"才非零；
+     整串揭示时是 0（那种情况字符是错峰落位的，逐个让位会互相压住）。
+     ⚠️ 这条动画动的是 margin（会触发布局），但它是**一次性、单元素、0.18s**，
+     不是循环动画 —— 和"循环里不许动 width/margin"那条禁令不冲突。 */
 .d-id-ch {
   display: inline-block;
   transform-origin: 0 100%;
-  animation: id-type 0.34s var(--ease-out) both;
-  animation-delay: calc(var(--i) * var(--step, 70ms) + 0.34s);
+  margin-right: calc(-1 * var(--w, 0em));
+  animation:
+    id-type var(--type-dur) var(--ease-out) both,
+    id-occupy var(--type-dur) var(--ease-out) both;
+  animation-delay: calc(var(--i) * var(--step, 70ms) + var(--type-lead));
 }
 
 /* 位移和缩放都用 em 而不是 px：字号是算出来的，em 能跟着一起缩放。
@@ -636,6 +787,71 @@ const idStyle = computed(() => ({
     opacity: 1;
     transform: none;
   }
+}
+
+/* ==================================================================
+ * 末尾的「待输入」光标
+ * ==================================================================
+ * 一条一直在闪的下划线，跟在打出来的 ID 后面，像终端等着你继续敲。
+ * 一个字都没输入时它落在**起点**（第一个字符将要出现的位置）——
+ * 那一格于是变成"闪着等你敲"，而不是一片空白。
+ *
+ * ★ 为什么拆成两层（span + ::before）而不是一个元素一个动画？
+ *   "什么时候登场"和"一直闪"是两件事，都想动 opacity，
+ *   压在一个元素上会互相覆盖。现在外层管登场、::before 管闪，
+ *   两层 opacity 相乘 —— 淡入期间光标跟着一起亮起来，之后就是纯粹的闪。
+ *
+ * ★ 外层是 animation-fill-mode: both，所以**延迟期间它停在 0% 的 opacity: 0 上**。
+ *   这个延迟（--caret-delay）在两种语境下含义不同：
+ *
+ *   ① 整串揭示（主页核验回来的用户名 / 粘贴）：延迟 = 末字落定那一刻。
+ *      字符是靠 opacity 进的场，而 `.d-id` 是 nowrap 的行内块，**整串宽度一上来就铺满**，
+ *      光标若提前亮相就会蹲在整行最右端，离正在打字的位置隔着十几个字，像个 bug。
+ *      ★ 让它在这种语境下"重新登场"靠的是模板里的 :key（caretGen）——
+ *        同一个元素上改 animation-delay 不会重新计时。
+ *
+ *   ② 用户逐键敲（.d-id--live）：延迟是 0，光标**一直亮着、从不消失** ——
+ *      那才是输入框里的竖线。它的位置也**不靠延迟去追**，而是靠 .d-id-ch 的
+ *      id-occupy（未落定的字符先不占地方）自然落在已出现文字的末尾。
+ *      ⚠️ 这两件事必须一起做：只加"未落定不占位"而延迟还留着，
+ *         光标就会每隔一下消失一次；只改延迟而占位照旧，它又会提前跑到终点。
+ *
+ * ★ 空白态（一个字都没输入）靠**同一套公式**自动成立，不需要第三套逻辑：
+ *   --n = 0，max(n - 1, 0) 把它压成 0，延迟就是 --type-lead + --type-dur ——
+ *   等装饰层淡入完，它就亮起来。此时行宽只剩光标自己，于是它正好落在起点。
+ *
+ * ★ 下划线用 ::before 画，不用真的键盘字符 `_`：
+ *   这里字号是 2~52px 之间算出来的动态值，`_` 的位置和粗细由字体度量决定，
+ *   字号一小它就跟着糊掉；画一根 0.06em 的条子反而处处一致。
+ *   顺带和 AppShell 底栏那个方块光标保持了一致：本项目里的光标都是画出来的。
+ *   ⚠️ 宽高不能只写 em：字号下限是 2px，那时 0.06em 只有 0.12px，会直接消失，
+ *   所以用 max() 兜住一个 1px 的地板。
+ *
+ * ★ 节奏 1.1s：比底栏那个方块光标（1.4s）稍快。两者离得远，
+ *   不会撞成"两个频率打架"（那条教训记在 HomeView 的 .life-fill--low 上）。
+ * ================================================================== */
+.d-id-caret {
+  display: inline-block;
+  margin-left: 0.04em;
+  /* 负值 = 相对基线往下挪。用长度而不是 baseline 关键字：
+     inline-block 的 baseline 各家算法有细微差别，这里要的是确定的落点。
+     0.08em ≈ 让这条线的顶边刚好贴着基线 —— 就是下划线该在的位置。 */
+  vertical-align: -0.08em;
+  /* 出场时机见上面那一大段说明 + .d-id 里的 --caret-delay。
+     兜底值 0.68s = --type-lead + --type-dur（空白态那条路径）。 */
+  animation: id-caret-in 0.18s var(--ease-out) both;
+  animation-delay: var(--caret-delay, 0.68s);
+}
+
+.d-id-caret::before {
+  content: '';
+  display: block;
+  width: max(2px, 0.36em);
+  height: max(1px, 0.06em);
+  /* currentColor 而不是写死颜色：ID 用的是 --ink，Terminal 深灰、Blueprint 蓝，
+     光标自动跟着走，不用按主题写两遍。 */
+  background: currentColor;
+  animation: id-caret-blink 1.1s linear infinite;
 }
 
 /* ==================================================================
