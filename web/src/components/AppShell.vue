@@ -22,34 +22,54 @@
 import ThemeDecor from './ThemeDecor.vue'
 import { THEMES, theme, setTheme } from '../utils/theme'
 
-defineProps({
-  /** 顶栏中央的标题 */
-  title: { type: String, default: 'GENJITSUTOUHIJK / TERMINAL' },
-  /** 底栏状态文字 */
-  status: { type: String, default: 'Terminal / Online' },
-  /**
-   * 当前页面的身份标识 —— 登录/注册页传输入框里正在敲的用户名，
-   * 主页传服务端核验过的用户名。
-   *
-   * 外壳自己不用它，只负责把它转发给 <ThemeDecor />：
-   * 装饰层靠这个值把左外栏那块无含义的衬线字母换成真实的 ID。
-   * 由外壳中转而不是各页面自己塞，是为了让三个页面共用同一份接线，
-   * 且页面不必知道"装饰层是怎么实现的"。
-   */
-  identifier: { type: String, default: '' },
-  /**
-   * 当前页内容列的宽度（px）—— 同样只负责转发给 <ThemeDecor />。
-   *
-   * 装饰层要拿它算"左外栏还剩多少横向空间"，才能把用户 ID 的字号
-   * 调成刚好填满那一格。⚠️ 必须和那一页的容器宽度一致：
-   *   登录页 / 注册页 → .panel 的 400   主页 → .home 的 920
-   * 传小了，算出的余量会偏大，字就会压到面板上。
-   *
-   * 默认 920 是"三个页面里最宽"的那个：万一哪个页面忘了传，
-   * 结果也只是字偏小，而不是溢出去。
-   */
-  contentWidth: { type: Number, default: 920 },
-})
+/**
+ * props 用**类型化**声明（defineProps<{...}> + withDefaults），
+ * 而不是运行时对象式 `defineProps({ title: { type: String } })`。
+ *
+ * 区别不在功能、在"能不能被编译器看见"：对象式只在运行时做校验，
+ * 写 `<AppShell :title="123" />` 或模板里拼错 prop 名都不会报错；
+ * 类型化声明让 vue-tsc 静态检查这些 prop，写错立刻标红。
+ *
+ * withDefaults 的结果这里没有赋给变量 —— 因为下面这四个 prop
+ * 只在 <template> 里用（title / status / identifier / contentWidth），
+ * 脚本里不引用，赋值反而会撞上 noUnusedLocals。
+ */
+withDefaults(
+  defineProps<{
+    /** 顶栏中央的标题 */
+    title?: string
+    /** 底栏状态文字 */
+    status?: string
+    /**
+     * 当前页面的身份标识 —— 登录/注册页传输入框里正在敲的用户名，
+     * 主页传服务端核验过的用户名。
+     *
+     * 外壳自己不用它，只负责把它转发给 <ThemeDecor />：
+     * 装饰层靠这个值把左外栏那块无含义的衬线字母换成真实的 ID。
+     * 由外壳中转而不是各页面自己塞，是为了让三个页面共用同一份接线，
+     * 且页面不必知道"装饰层是怎么实现的"。
+     */
+    identifier?: string
+    /**
+     * 当前页内容列的宽度（px）—— 同样只负责转发给 <ThemeDecor />。
+     *
+     * 装饰层要拿它算"左外栏还剩多少横向空间"，才能把用户 ID 的字号
+     * 调成刚好填满那一格。⚠️ 必须和那一页的容器宽度一致：
+     *   登录页 / 注册页 → .panel 的 400   主页 → .home 的 920
+     * 传小了，算出的余量会偏大，字就会压到面板上。
+     *
+     * 默认 920 是"三个页面里最宽"的那个：万一哪个页面忘了传，
+     * 结果也只是字偏小，而不是溢出去。
+     */
+    contentWidth?: number
+  }>(),
+  {
+    title: 'GENJITSUTOUHIJK / TERMINAL',
+    status: 'Terminal / Online',
+    identifier: '',
+    contentWidth: 920,
+  },
+)
 </script>
 
 <template>

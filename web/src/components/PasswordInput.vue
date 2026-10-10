@@ -3,12 +3,28 @@ import { ref } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
-defineProps({
-  code: { type: String, default: '02' },
-  label: { type: String, default: '密码' },
-  placeholder: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-})
+/**
+ * props 用**类型化**声明（defineProps<{...}> + withDefaults），
+ * 与下面的类型化 defineEmits 配套 —— 让 vue-tsc 静态检查这些 prop，
+ * 而不是像对象式那样只在运行时校验，写错名字类型都不报错。
+ *
+ * 结果不赋给变量：这四个 prop 只在 <template> 里用，脚本中不引用，
+ * 赋值会撞上 noUnusedLocals。
+ */
+withDefaults(
+  defineProps<{
+    code?: string
+    label?: string
+    placeholder?: string
+    modelValue?: string
+  }>(),
+  {
+    code: '02',
+    label: '密码',
+    placeholder: '',
+    modelValue: '',
+  },
+)
 
 /**
  * 类型化的 emits。
