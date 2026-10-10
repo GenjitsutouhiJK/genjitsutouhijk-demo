@@ -827,8 +827,10 @@ const idStyle = computed(() => ({
  *   ⚠️ 宽高不能只写 em：字号下限是 2px，那时 0.06em 只有 0.12px，会直接消失，
  *   所以用 max() 兜住一个 1px 的地板。
  *
- * ★ 节奏 1.1s：比底栏那个方块光标（1.4s）稍快。两者离得远，
- *   不会撞成"两个频率打架"（那条教训记在 HomeView 的 .life-fill--low 上）。
+ * ★ 节奏与底栏那个方块光标**完全一致**：共用 main.css 里的 caret-blink
+ *   关键帧 + tokens.css 里的 --blink-period。两处同频同相 ——
+ *   因为光标元素**始终在 DOM 里**（空输入也渲染），它的闪烁和底栏那颗
+ *   是在同一时刻开始的，周期又相同，所以永远不会错开。
  * ================================================================== */
 .d-id-caret {
   display: inline-block;
@@ -844,6 +846,9 @@ const idStyle = computed(() => ({
 }
 
 .d-id-caret::before {
+  /* 亮起来的强度：这里要显眼（底栏那颗是 0.65 的淡点，这里满亮）。
+     闪烁本身用的是 main.css 的 caret-blink，周期走 --blink-period。 */
+  --blink-on: 1;
   content: '';
   display: block;
   width: max(2px, 0.36em);
@@ -851,7 +856,7 @@ const idStyle = computed(() => ({
   /* currentColor 而不是写死颜色：ID 用的是 --ink，Terminal 深灰、Blueprint 蓝，
      光标自动跟着走，不用按主题写两遍。 */
   background: currentColor;
-  animation: id-caret-blink 1.1s linear infinite;
+  animation: caret-blink var(--blink-period) linear infinite;
 }
 
 /* ==================================================================

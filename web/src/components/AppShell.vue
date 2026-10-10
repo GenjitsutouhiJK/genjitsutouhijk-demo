@@ -370,8 +370,12 @@ html[data-theme='blueprint'] .watermark {
    它让"Terminal / Online"这句话从一句静态文案，变成"这台终端正在运行"。
    用 background: currentColor 而不是写死颜色：底栏文字颜色一变，
    光标自己跟着变，不用两处维护。
-   55% 那个硬切点配 linear 就是干脆的"亮—灭"，不需要 steps()。 */
+   ★ 闪烁本身不在本地定义 —— 用的是 main.css 里那条 caret-blink，
+   和打字机末尾的光标**共用同一条关键帧与同一个周期令牌**
+   （--blink-period，见 tokens.css），两处永远同频。
+   这里只声明自己"亮起来的强度"：这一颗是淡淡的一点，不是满亮。 */
 .footer-text::after {
+  --blink-on: 0.65;
   content: '';
   display: inline-block;
   width: 6px;
@@ -379,18 +383,7 @@ html[data-theme='blueprint'] .watermark {
   margin-left: 8px;
   vertical-align: middle;
   background: currentColor;
-  animation: caret-blink 1.4s linear infinite;
-}
-
-@keyframes caret-blink {
-  0%,
-  55% {
-    opacity: 0.65;
-  }
-  56%,
-  100% {
-    opacity: 0;
-  }
+  animation: caret-blink var(--blink-period) linear infinite;
 }
 
 /* ---------------- 关键帧 ---------------- */
