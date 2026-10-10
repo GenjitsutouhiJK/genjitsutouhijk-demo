@@ -97,7 +97,7 @@ src/
 
 > 前端的**静态资源目录 `public/` 不存在** —— 2026-10-09 按用户要求移除了整套站点图标，
 > `public/` 与生成脚本 `scripts/build-icons.py` 已一并删除，`index.html` 里没有任何 `<link rel="icon">`。
-> `vite.config.js` 没配 `publicDir`（默认值就是 `public`），**目录不存在时 Vite 静默跳过，不会报错**。
+> `vite.config.ts` 没配 `publicDir`（默认值就是 `public`），**目录不存在时 Vite 静默跳过，不会报错**。
 
 ## 主题：两套皮肤共存
 
@@ -136,16 +136,17 @@ Vue 完全不知道主题变了，没有响应式更新、没有 DOM diff，只�
 
 ## TypeScript
 
-**已全量迁移**（2026-10-09 完成），`src/` 下不再有 `.js` 文件：
+**已全量迁移**（2026-10-09 完成；2026-10-10 补齐 `vite.config`），`web/` 下不再有 `.js` 文件：
 
 | 范围 | 状态 |
 |---|---|
 | `types/` `api/` `utils/` | ✅ `.ts`（纯逻辑、无模板，收益最高） |
 | `main.ts` `router/index.ts` | ✅ 已是 `.ts` |
 | 全部 `.vue`（含 `HomeView.vue` `ThemeMotion.vue`） | ✅ 均已加 `lang="ts"` |
+| `vite.config.ts` | ✅ 由 `vite.config.js` 改名；已在 `tsconfig.json` 的 `include` 里，故一并受类型检查 |
 
 迁移是**一个文件一个文件**做的，不是一次性全开。配置在 `tsconfig.json`：
-`strict: true`，同时保留 `allowJs: true` + `checkJs: false`（残留 `.js` 会被加载但不被检查）。
+`strict: true`，同时保留 `allowJs: true` + `checkJs: false`（当前已无 `.js`，留着只为将来再加 `.js` 时兜底）。
 开 `strict` 是为了把 `sessionStorage.getItem()` 的 `string | null`、
 `JSON.parse()` 的 `any`、JWT 解码的 `unknown` 这些"平时只写在注释里的假设"全摊到明面上。
 

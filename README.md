@@ -14,7 +14,7 @@
 | 认证 | Spring Security 7 + JWT（JJWT 0.13） | 无状态认证：登录发一张签名 token，之后每个请求自带；默认拒绝 + 自定义 401 响应 |
 | 数据库 | H2（文件模式）+ Spring Data JPA + Flyway | 零安装，不用装数据库服务；建表由 Flyway 的 SQL 脚本管理，换库只改配置 |
 | 密码存储 | Spring Security 的 BCrypt | 库里只存哈希，不存明文 |
-| 前端 `web/` | Vite + Vue 3 + Vue Router 4 + TypeScript | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫；**已全量迁移 TS**（`src/` 下无 `.js`）；两套可切换皮肤（Terminal / Blueprint） |
+| 前端 `web/` | Vite + Vue 3 + Vue Router 4 + TypeScript | 单页应用，登录页 / 注册页 / 主页，带双向路由守卫；**已全量迁移 TS**（`web/` 下无 `.js`）；两套可切换皮肤（Terminal / Blueprint） |
 | 通信 | 基于 `fetch` 的封装 + Spring CORS | 请求后端 `http://localhost:8080`，接口路径以 `/api` 开头，自动带 `Authorization` 头 |
 
 ## 仓库结构
@@ -65,7 +65,7 @@ genjitsutouhijk-demo/
 └─ web/                     前端（Vue 3）
    ├─ README.md             前端专属说明
    ├─ index.html            入口 HTML（含防主题闪跳的内联脚本；**无任何站点图标**，见"已知事项"）
-   ├─ vite.config.js        Vite 配置
+   ├─ vite.config.ts        Vite 配置
    ├─ tsconfig.json         TypeScript 配置（strict；类型检查不并入 build）
    └─ src/
       ├─ main.ts            应用入口：createApp + .use(router) + initTheme() + 注册 401 处理
@@ -257,8 +257,9 @@ npm run typecheck # 类型检查（含 .vue）
   （Terminal 灰阶实心 / Blueprint 蓝图线框），顶栏一键切换、选择持久化，**切换不重渲染组件**。
   新增 `ThemeDecor` / `ThemeMotion` 两个组件承载 Blueprint 专属的装饰层与几何动效。
 - **站点图标已整体移除**（2026-10-09，用户认为原图标不好看）：`web/public/` 与生成脚本一并删除，详见"已知事项"。
-- **前端已全量迁移到 TypeScript**（2026-10-09）：`src/` 下再无 `.js` ——
-  `main.ts` / `router/index.ts` 由 `git mv` 保留历史，`HomeView.vue` / `ThemeMotion.vue` 补上 `lang="ts"`；
+- **前端已全量迁移到 TypeScript**（2026-10-09，2026-10-10 补齐 `vite.config`）：`web/` 下再无 `.js` ——
+  `main.ts` / `router/index.ts` 由 `git mv` 保留历史，`HomeView.vue` / `ThemeMotion.vue` 补上 `lang="ts"`，
+  `vite.config.js` 改名 `vite.config.ts`；
   `npm run typecheck`（含 `.vue`）与 `typecheck:fast` 均 0 错。（迁移过程是**逐文件**推进的，避免一次性全开改到编译不过。）
 - **后端里程碑 ①**：Controller / Service 分层，全局异常处理 + 参数校验，错误码收进 `ErrorCode` 字典。
   对外接口行为完全不变。
