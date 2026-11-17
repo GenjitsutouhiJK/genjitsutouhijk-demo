@@ -16,7 +16,7 @@
  * AppShell 负责页面外壳（背景、水印、准星、顶栏、底栏），
  * 它标签之间的内容会填进中间的主区域。
  */
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import PasswordInput from '../components/PasswordInput.vue'
@@ -37,11 +37,34 @@ const notice = ref(takeNotice())
 
 const username = ref('')
 const password = ref('')
+const invalidField = ref('')
 const errorMessage = ref('') // 错误提示，空字符串表示没有错误
 const isLoading = ref(false) // 是否正在登录
 
-async function handleLogin() {
+function clearFieldError(event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement) || !invalidField.value) return
+  if (input.name === invalidField.value) {
+    invalidField.value = ''
+    errorMessage.value = ''
+  }
+}
+
+async function handleLogin(event: SubmitEvent) {
   if (isLoading.value) return // 正在登录时忽略重复点击
+  const form = event.currentTarget as HTMLFormElement
+  const values = new FormData(form)
+  username.value = String(values.get('username') ?? '')
+  password.value = String(values.get('password') ?? '')
+
+
+  invalidField.value = !username.value.trim() ? 'username' : !password.value ? 'password' : ''
+  if (invalidField.value) {
+    errorMessage.value = invalidField.value === 'username' ? '用户名不能为空' : '密码不能为空'
+    await nextTick()
+    form.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus()
+    return
+  }
 
   isLoading.value = true // 开始登录，按钮进入禁用态
   errorMessage.value = ''
@@ -90,7 +113,7 @@ async function handleLogin() {
     <section class="panel">
       <div class="panel-bar">Authentication</div>
 
-      <div class="panel-body">
+      <form class="panel-body" method="post" novalidate @submit.prevent="handleLogin" @input="clearFieldError">
         <!-- 为什么会被带到这里（凭证过期等）。放在表单最上面，
              一眼就能看到"我不是走错页面了，是得重新登录"。 -->
         <p v-if="notice" class="status notice">{{ notice }}</p>
@@ -98,24 +121,38 @@ async function handleLogin() {
         <div class="field">
           <div class="field-head">
             <span class="field-code">01 /</span>
-            <span class="field-label">用户名</span>
+            <label class="field-label" for="login-username">用户名</label>
             <span class="field-line"></span>
           </div>
-          <input v-model="username" placeholder="请输入用户名" />
+          <input
+            v-model="username"
+            id="login-username"
+            name="username"
+            autocomplete="username"
+            required
+            :aria-invalid="invalidField === 'username'"
+            :aria-describedby="invalidField === 'username' ? 'login-error' : undefined"
+            placeholder="请输入用户名"
+          />
         </div>
 
         <PasswordInput
           v-model="password"
+          id="login-password"
+          name="password"
+          autocomplete="current-password"
+          required
+          :aria-invalid="invalidField === 'password'"
+          :aria-describedby="invalidField === 'password' ? 'login-error' : undefined"
           code="02"
           placeholder="请输入密码"
-          @keyup.enter="handleLogin"
         />
 
-        <button class="btn btn--primary" :disabled="isLoading" @click="handleLogin">
+        <button class="btn btn--primary" type="submit" :disabled="isLoading">
           {{ isLoading ? '登录中…' : '登 录' }}
         </button>
 
-        <p v-if="errorMessage" class="status">{{ errorMessage }}</p>
+        <p id="login-error" class="form-error" :class="{ status: errorMessage }" aria-live="polite" aria-atomic="true">{{ errorMessage }}</p>
 
         <p class="form-switch">
           <span>还没有账号？</span>
@@ -124,7 +161,7 @@ async function handleLogin() {
             创建账号
           </RouterLink>
         </p>
-      </div>
+      </form>
     </section>
   </AppShell>
 </template>

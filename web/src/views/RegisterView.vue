@@ -15,7 +15,7 @@
  *    顶层多一个注释就会让根变成 Fragment，离开这一页时整页会永久空白且不报错。
  *    所以关于外壳的说明写在这里，而不是写在 <template> 里。
  */
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import PasswordInput from '../components/PasswordInput.vue'
@@ -27,6 +27,7 @@ const router = useRouter()
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('') // 只在前端用，不会发给后端
+const invalidField = ref('')
 const errorMessage = ref('') // 错误提示，空字符串表示没有错误
 const isLoading = ref(false) // 是否正在提交
 
@@ -39,7 +40,7 @@ const PASSWORD_MAX = 32
 /**
  * 提交前的本地校验
  *
- * 返回空字符串表示"没问题，可以发请求"，否则返回要显示给用户的提示。
+ * 校验失败时返回第一个无效字段及其提示。
  *
  * 为什么要先在本地校验一遍？后端明明已经校验了。
  *   因为后端校验的代价是"一个来回的网络请求"。用户把密码少打一位，
@@ -49,7 +50,6 @@ const PASSWORD_MAX = 32
  * （用 curl、Postman 都行），所以后端那份才是真正的防线。
  * 两边的规则要一起改，改一处忘一处是最常见的 bug 来源。
  *
- * @returns {string} 错误提示，空串表示通过
  */
 function validate() {
   // 用户名前后可能有空格（复制粘贴时很常见），存进库之前先去掉。
@@ -57,31 +57,50 @@ function validate() {
   // 否则用户设的 "abc 123" 会变成 "abc 123"->"abc 123" 校验通过但登录时对不上。
   const name = username.value.trim()
 
-  if (!name) return '用户名不能为空'
+  if (!name) return { field: 'username', message: '用户名不能为空' }
   if (name.length < USERNAME_MIN || name.length > USERNAME_MAX) {
-    return `用户名长度需要在 ${USERNAME_MIN} 到 ${USERNAME_MAX} 个字符之间`
+    return { field: 'username', message: `用户名长度需要在 ${USERNAME_MIN} 到 ${USERNAME_MAX} 个字符之间` }
   }
 
-  if (!password.value) return '密码不能为空'
+  if (!password.value) return { field: 'password', message: '密码不能为空' }
   if (password.value.length < PASSWORD_MIN || password.value.length > PASSWORD_MAX) {
-    return `密码长度需要在 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 个字符之间`
+    return { field: 'password', message: `密码长度需要在 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 个字符之间` }
   }
 
   // "确认密码"是纯前端的概念：后端只需要一个密码字段，
   // 它根本不知道用户输了两次。这条规则只有这里能查。
   if (password.value !== confirmPassword.value) {
-    return '两次输入的密码不一致'
+    return { field: 'confirmPassword', message: '两次输入的密码不一致' }
   }
 
-  return ''
+  return null
 }
 
-async function handleRegister() {
+function clearFieldError(event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement) || !invalidField.value) return
+  if (input.name === invalidField.value || (invalidField.value === 'confirmPassword' && input.name === 'password')) {
+    invalidField.value = ''
+    errorMessage.value = ''
+  }
+}
+
+async function handleRegister(event: SubmitEvent) {
   if (isLoading.value) return // 正在提交时忽略重复点击
+  const form = event.currentTarget as HTMLFormElement
+  const values = new FormData(form)
+  username.value = String(values.get('username') ?? '')
+  password.value = String(values.get('password') ?? '')
+  confirmPassword.value = String(values.get('confirmPassword') ?? '')
+  invalidField.value = ''
+
 
   const localError = validate()
   if (localError) {
-    errorMessage.value = localError
+    invalidField.value = localError.field
+    errorMessage.value = localError.message
+    await nextTick()
+    form.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus()
     return // 本地就没过，不发请求，省一个来回
   }
 
@@ -125,21 +144,33 @@ async function handleRegister() {
     <section class="panel">
       <div class="panel-bar">Registration</div>
 
-      <div class="panel-body">
+      <form class="panel-body" method="post" novalidate @submit.prevent="handleRegister" @input="clearFieldError">
         <div class="field">
           <div class="field-head">
             <span class="field-code">01 /</span>
-            <span class="field-label">用户名</span>
+            <label class="field-label" for="register-username">用户名</label>
             <span class="field-line"></span>
           </div>
           <input
             v-model="username"
+            id="register-username"
+            name="username"
+            autocomplete="username"
+            required
+            :aria-invalid="invalidField === 'username'"
+            :aria-describedby="invalidField === 'username' ? 'register-error' : undefined"
             :placeholder="`${USERNAME_MIN} - ${USERNAME_MAX} 个字符`"
           />
         </div>
 
         <PasswordInput
           v-model="password"
+          id="register-password"
+          name="password"
+          autocomplete="new-password"
+          required
+          :aria-invalid="invalidField === 'password'"
+          :aria-describedby="invalidField === 'password' ? 'register-error' : undefined"
           code="02"
           label="密码"
           :placeholder="`${PASSWORD_MIN} - ${PASSWORD_MAX} 个字符`"
@@ -148,17 +179,22 @@ async function handleRegister() {
         <!-- 确认密码：防止用户把密码敲错却浑然不觉（密码框看不见内容，这类手误特别常见） -->
         <PasswordInput
           v-model="confirmPassword"
+          id="register-confirmPassword"
+          name="confirmPassword"
+          autocomplete="new-password"
+          required
+          :aria-invalid="invalidField === 'confirmPassword'"
+          :aria-describedby="invalidField === 'confirmPassword' ? 'register-error' : undefined"
           code="03"
           label="确认密码"
           placeholder="请再输入一次密码"
-          @keyup.enter="handleRegister"
         />
 
-        <button class="btn btn--primary" :disabled="isLoading" @click="handleRegister">
+        <button class="btn btn--primary" type="submit" :disabled="isLoading">
           {{ isLoading ? '注册中…' : '注 册' }}
         </button>
 
-        <p v-if="errorMessage" class="status">{{ errorMessage }}</p>
+        <p id="register-error" class="form-error" :class="{ status: errorMessage }" aria-live="polite" aria-atomic="true">{{ errorMessage }}</p>
 
         <p class="form-switch">
           <span>已经有账号了？</span>
@@ -168,7 +204,7 @@ async function handleRegister() {
             返回登录
           </RouterLink>
         </p>
-      </div>
+      </form>
     </section>
   </AppShell>
 </template>

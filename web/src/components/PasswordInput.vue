@@ -8,11 +8,12 @@ defineOptions({ inheritAttrs: false })
  * 与下面的类型化 defineEmits 配套 —— 让 vue-tsc 静态检查这些 prop，
  * 而不是像对象式那样只在运行时校验，写错名字类型都不报错。
  *
- * 结果不赋给变量：这四个 prop 只在 <template> 里用，脚本中不引用，
+ * 结果不赋给变量：这些 prop 只在 <template> 里用，脚本中不引用，
  * 赋值会撞上 noUnusedLocals。
  */
 withDefaults(
   defineProps<{
+    id: string
     code?: string
     label?: string
     placeholder?: string
@@ -61,14 +62,14 @@ function handleInput(event: Event) {
   <div class="field">
     <div class="field-head">
       <span class="field-code">{{ code }} /</span>
-      <span class="field-label">{{ label }}</span>
+      <label class="field-label" :for="id">{{ label }}</label>
       <span class="field-line"></span>
     </div>
 
     <div class="password-wrap">
-      <!-- inheritAttrs: false + v-bind="$attrs"，让外部传入的原生事件（如 @keyup.enter）直接落在 input 上 -->
       <input
         v-bind="$attrs"
+        :id="id"
         :value="modelValue"
         :type="showPassword ? 'text' : 'password'"
         :placeholder="placeholder"

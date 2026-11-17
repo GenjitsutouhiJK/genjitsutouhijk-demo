@@ -294,6 +294,10 @@ body {
  * 表单结果提示（登录 / 注册页共用，只在出错时出现）
  * 用一条上边线和上面隔开，再配一个和标签行同款的小方块节点。
  * ------------------------------------------------------------------ */
+.form-error:not(.status) {
+  position: absolute;
+}
+
 .status {
   display: flex;
   align-items: center;
@@ -305,7 +309,7 @@ body {
   letter-spacing: var(--ls-mid);
   color: var(--err);
   /* 从左往右轻推 5px 出现，像一行字刚被打印上去。
-     这段提示是 v-if 控制的，所以每次重新出现都会重播一次 ——
+     报错样式在提示出现时才加上，所以每次重新出现都会重播一次 ——
      正是想要的效果：第二次提交又失败时，用户能看出"它又报了"。 */
   animation: status-in var(--dur) var(--ease-out) both;
 }
