@@ -17,3 +17,7 @@ Thumbs.db
 node_modules/
 target/
 dist/
+
+# 从仓库根目录启动后端时生成的 H2 数据库
+/data/*.mv.db
+/data/*.trace.db
